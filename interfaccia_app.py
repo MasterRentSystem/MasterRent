@@ -1,45 +1,36 @@
 import streamlit as st
 import datetime
+from PIL import Image
+import fpdf
 
-st.set_page_config(page_title="MasterRent Forio", page_icon="🛵")
+st.set_page_config(page_title="Battaglia Rent - Ischia", page_icon="🛵")
+st.title("🛵 BATTAGLIA RENT! - Ischia")
 
-st.title("🛵 MasterRent System - Forio")
-st.subheader("Gestione Professionale Noleggio & Multe")
+nome = st.text_input("NOME E COGNOME CLIENTE")
+documento = st.text_input("PATENTE / DOCUMENTO ID")
+targa = st.text_input("TARGA VEICOLO")
+prezzo = st.number_input("PREZZO TOTALE (€)", min_value=0)
+foto_scattata = st.camera_input("Inquadra la Patente")
 
-# --- DATABASE FLOTTA ---
-moto = ["Liberty 125 (EB12345)", "Bebe 125 (BX98765)", "SH 150 (AA111AA)"]
+testo_legale = "1. Stato Veicolo: Ottimo. 2. Multe: Responsabilità cliente + 20€ gestione. 3. Danni: Responsabilità cliente."
+st.info(testo_legale)
+accetto = st.checkbox("Accetto i termini (Firma Digitale)")
 
-# --- SIDEBAR (Menu Laterale) ---
-st.sidebar.header("Menu Operativo")
-opzione = st.sidebar.selectbox("Cosa vuoi fare?", ["Nuovo Contratto", "Invia Multa ai Vigili", "Stato Flotta"])
-
-if opzione == "Nuovo Contratto":
-    st.header("📝 Crea Nuovo Contratto")
-    nome = st.text_input("Nome e Cognome Cliente")
-    mezzo = st.selectbox("Seleziona Motore", moto)
-    giorni = st.number_input("Giorni di Noleggio", min_value=1, value=1)
-    
-    # Calcolo Prezzo Automatico (Alta/Bassa Stagione)
-    mese = datetime.datetime.now().month
-    prezzo_g = 50 if mese in [7, 8] else 30
-    totale = giorni * prezzo_g
-    
-    st.write(f"*Tariffa applicata:* {'Alta Stagione (50€)' if mese in [7, 8] else 'Bassa Stagione (30€)'}")
-    st.write(f"### Totale: {totale}€")
-    
-    if st.button("Genera Contratto Legale"):
-        st.success(f"Contratto creato per {nome}! Pronto per la firma digitale.")
-        st.info("Clausola: Il conducente è responsabile per ogni sanzione pecuniaria.")
-
-elif opzione == "Invia Multa ai Vigili":
-    st.header("⚠️ Gestione Multe (Rimbalzo)")
-    targa_multa = st.text_input("Targa del verbale")
-    data_multa = st.date_input("Data dell'infrazione")
-    
-    if st.button("Scarica Responsabilità"):
-        st.warning(f"Modulo generato! Invio dati conducente al Comando di Forio per targa {targa_multa}.")
-
-else:
-    st.header("📊 Stato Flotta")
-    st.table([{"Mezzo": "Liberty", "Stato": "Disponibile"}, {"Mezzo": "Bebe", "Stato": "Noleggiato"}])
-
+if st.button("💾 GENERA E SCARICA PDF"):
+    if not nome or not foto_scattata or not accetto:
+        st.error("Mancano dati, foto o accettazione!")
+    else:
+        pdf = fpdf.FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(200, 10, txt="BATTAGLIA RENT - CONTRATTO", ln=1, align='C')
+        pdf.set_font("Arial", size=12)
+        pdf.ln(10)
+        pdf.cell(200, 10, txt=f"Cliente: {nome}", ln=1)
+        pdf.cell(200, 10, txt=f"Targa: {targa}", ln=1)
+        pdf.multi_cell(0, 10, txt=testo_legale)
+        pdf_output = "contratto_corrente.pdf"
+        pdf.output(pdf_output)
+        with open(pdf_output, "rb") as f:
+            st.download_button("📥 SCARICA ORA IL PDF", f, file_name=f"Contratto_{nome}.pdf")
+        st.balloons()
