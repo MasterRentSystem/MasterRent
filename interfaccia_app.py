@@ -12,15 +12,10 @@ url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# Funzione per pulire i testi dagli accenti (per evitare errori PDF)
 def clean_text(text):
     if not text: return ""
-    replacements = {
-        'à': 'a', 'è': 'e', 'é': 'e', 'ì': 'i', 'ò': 'o', 'ù': 'u',
-        '€': 'Euro'
-    }
-    for k, v in replacements.items():
-        text = text.replace(k, v)
+    replacements = {'à': 'a', 'è': 'e', 'é': 'e', 'ì': 'i', 'ò': 'o', 'ù': 'u', '€': 'Euro'}
+    for k, v in replacements.items(): text = text.replace(k, v)
     return text
 
 st.sidebar.title("🔑 Accesso Gestore")
@@ -36,104 +31,70 @@ if lista_aziende:
     if menu == "Nuovo Contratto":
         st.header(f"📝 {scelta_azienda['nome_azienda'].upper()}")
         
-        with st.expander("👤 Anagrafica Cliente", expanded=True):
+        with st.expander("👤 DATI CLIENTE", expanded=True):
             col1, col2 = st.columns(2)
             nome = col1.text_input("NOME E COGNOME")
             cf = col2.text_input("CODICE FISCALE")
-            data_nascita = col1.date_input("DATA DI NASCITA", datetime.date(1990, 1, 1))
-            luogo_nascita = col2.text_input("LUOGO DI NASCITA")
-            residenza = col1.text_input("RESIDENZA")
+            residenza = col1.text_input("RESIDENZA COMPLETA")
             telefono = col2.text_input("TELEFONO")
-            tipo_doc = col1.selectbox("TIPO DOCUMENTO", ["Patente", "C.I.", "Passaporto"])
-            num_doc = col2.text_input("NUMERO DOC")
+            doc = col1.text_input("TIPO E NUM. DOCUMENTO")
 
-        with st.expander("🛵 Dati Noleggio", expanded=True):
+        with st.expander("🛵 DATI NOLEGGIO", expanded=True):
             col3, col4 = st.columns(2)
             targa = col3.text_input("TARGA VEICOLO")
-            data_inizio = col3.date_input("DATA INIZIO", datetime.date.today())
-            data_fine = col4.date_input("DATA FINE", datetime.date.today() + datetime.timedelta(days=1))
-            prezzo_tot = col4.number_input("TOTALE (Euro)", min_value=0)
+            prezzo = col4.number_input("CORRISPETTIVO (€)", min_value=0)
+            inizio = col3.date_input("DATA INIZIO", datetime.date.today())
+            fine = col4.date_input("DATA FINE", datetime.date.today() + datetime.timedelta(days=1))
 
-        st.subheader("✍️ Firma del Cliente")
-        canvas_result = st_canvas(
-            fill_color="rgba(255, 255, 255, 1)", stroke_width=3,
-            stroke_color="#000000", background_color="#FFFFFF",
-            height=150, key="signature",
-        )
+        st.subheader("✍️ Firma per Accettazione Condizioni (Punti 1-14)")
+        canvas_result = st_canvas(fill_color="white", stroke_width=3, stroke_color="black", background_color="white", height=150, key="sig")
 
-        if st.button("💾 GENERA CONTRATTO E SALVA"):
-            if nome and cf and targa and canvas_result.image_data is not None:
-                # 1. Salva su DB
-                payload = {
-                    "cliente": nome, "cf": cf, "targa": targa, "prezzo_tot": str(prezzo_tot),
-                    "data_inizio": str(data_inizio), "azienda_id": scelta_azienda['id'],
-                    "telefono": telefono, "residenza": residenza
-                }
+        if st.button("💾 GENERA CONTRATTO UFFICIALE"):
+            if nome and targa and canvas_result.image_data is not None:
+                # Salva su DB
+                payload = {"cliente": nome, "cf": cf, "targa": targa, "prezzo_tot": str(prezzo), "data_inizio": str(inizio), "azienda_id": scelta_azienda['id']}
                 supabase.table("contratti").insert(payload).execute()
 
-                # 2. Crea PDF
+                # Genera PDF
                 pdf = fpdf.FPDF()
                 pdf.add_page()
                 
-                # Intestazione
-                pdf.set_font("Arial", 'B', 20)
-                pdf.cell(0, 15, txt=clean_text(scelta_azienda['nome_azienda'].upper()), ln=1, align='C')
-                
-                pdf.set_font("Arial", 'B', 12)
-                pdf.cell(0, 10, txt="CONTRATTO DI NOLEGGIO / RENTAL AGREEMENT", ln=1, align='C')
+                # INTESTAZIONE DALLE TUE FOTO
+                pdf.set_font("Arial", 'B', 16)
+                pdf.cell(0, 10, txt="Noleggio BATTAGLIA MARIANNA", ln=1, align='L')
+                pdf.set_font("Arial", size=9)
+                pdf.cell(0, 5, txt="Via Cognole, 5 - 80075 Forio (NA) - P.IVA 10252601215", ln=1, align='L')
                 pdf.ln(5)
 
-                # Dati Cliente (Puliti da accenti)
+                # BOX DATI
                 pdf.set_font("Arial", 'B', 10)
-                pdf.cell(0, 8, txt="DATI CLIENTE / CUSTOMER INFO", ln=1)
+                pdf.cell(0, 8, txt="DETTAGLI NOLEGGIO", ln=1, border='B')
                 pdf.set_font("Arial", size=10)
+                pdf.multi_cell(0, 8, txt=clean_text(f"Cliente: {nome}\nC.F.: {cf}\nResidenza: {residenza}\nDocumento: {doc}\nVeicolo: {targa}\nPeriodo: dal {inizio} al {fine}\nCorrispettivo: Euro {prezzo}"))
                 
-                pdf.cell(95, 8, txt=clean_text(f"Nome/Name: {nome}"), border=1)
-                pdf.cell(95, 8, txt=clean_text(f"C.F./Tax ID: {cf}"), border=1, ln=1)
-                pdf.cell(95, 8, txt=clean_text(f"Nato a: {luogo_nascita} il {data_nascita}"), border=1)
-                pdf.cell(95, 8, txt=clean_text(f"Residente/Address: {residenza}"), border=1, ln=1)
-                pdf.cell(95, 8, txt=clean_text(f"Tel: {telefono}"), border=1)
-                pdf.cell(95, 8, txt=clean_text(f"Doc: {tipo_doc} n. {num_doc}"), border=1, ln=1)
-                
+                # CONDIZIONI GENERALI (Sintesi dei tuoi 14 punti)
                 pdf.ln(5)
+                pdf.set_font("Arial", 'B', 8)
+                pdf.cell(0, 5, txt="CONDIZIONI GENERALI DI CONTRATTO", ln=1)
+                pdf.set_font("Arial", size=6)
+                condizioni = (
+                    "1. Veicolo consegnato in ottimo stato, riconsegna con pieno. 2. Cliente responsabile infrazioni C.d.S. "
+                    "3. Addebito Euro 25.83 per gestione amministrativa verbali. 4. Responsabilita danni e furto a carico del cliente. "
+                    "5. Divieto trasporto persone eccedenti e guida in stato di ebbrezza. 6. Foro competente: Napoli/Ischia. "
+                    "Il cliente dichiara di aver letto e accettato i 14 punti delle condizioni generali e l'informativa Privacy GDPR."
+                )
+                pdf.multi_cell(0, 4, txt=clean_text(condizioni))
 
-                # Dati Noleggio
-                pdf.set_font("Arial", 'B', 10)
-                pdf.cell(0, 8, txt="DATI NOLEGGIO / RENTAL INFO", ln=1)
-                pdf.set_font("Arial", size=10)
-                
-                pdf.cell(95, 8, txt=clean_text(f"Veicolo/Vehicle Targa: {targa}"), border=1)
-                pdf.cell(95, 8, txt=clean_text(f"Prezzo/Price: Euro {prezzo_tot}"), border=1, ln=1)
-                pdf.cell(95, 8, txt=clean_text(f"Inizio/Start: {data_inizio}"), border=1)
-                pdf.cell(95, 8, txt=clean_text(f"Fine/End: {data_fine}"), border=1, ln=1)
-
-                # Termini Legali
-                pdf.ln(5)
-                pdf.set_font("Arial", 'B', 9)
-                pdf.cell(0, 5, txt="TERMINI E CONDIZIONI / TERMS AND CONDITIONS", ln=1)
-                pdf.set_font("Arial", size=7)
-                testo = "Il cliente riceve il veicolo in ottimo stato ed e responsabile per multe (con Euro 20 spese gestione) e danni. / Customer receives vehicle in excellent condition and is liable for fines (Euro 20 fee) and damages."
-                pdf.multi_cell(0, 4, txt=testo)
-                
-                # Firma
+                # FIRMA
                 signature_img = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
                 signature_img.save("firma.png")
                 pdf.ln(5)
-                pdf.cell(0, 5, txt="FIRMA DEL CLIENTE / CUSTOMER SIGNATURE:", ln=1)
-                pdf.image("firma.png", x=10, w=50)
-                
+                pdf.set_font("Arial", 'B', 10)
+                pdf.cell(0, 5, txt="Firma del Cliente:", ln=1)
+                pdf.image("firma.png", x=10, w=40)
+
                 pdf_name = f"Contratto_{targa}.pdf"
                 pdf.output(pdf_name)
-                
-                st.success("✅ Contratto salvato e PDF generato!")
+                st.success("✅ Contratto Ufficiale Generato!")
                 with open(pdf_name, "rb") as f:
-                    st.download_button("📥 SCARICA PDF", f, file_name=pdf_name)
-            else:
-                st.error("Dati mancanti o firma non rilevata!")
-
-    elif menu == "Archivio & Multe":
-        st.header("🚨 Archivio Storico")
-        res = supabase.table("contratti").select("*").eq("azienda_id", scelta_azienda['id']).execute()
-        if res.data:
-            st.dataframe(pd.DataFrame(res.data))
-
+                    st.download_button("📥 Scarica Contratto PDF", f, file_name=pdf_name)
