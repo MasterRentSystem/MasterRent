@@ -20,9 +20,16 @@ def clean_t(text):
     for k, v in repls.items(): text = text.replace(k, v)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-# TESTI LEGALI
-ITA_14 = "1.Pieno/Ottimo stato. 2.Multe cliente. 3.Gestione €25.83. 4.Danni/Furto cliente. 5.No alcool. 6.Riconsegna puntuale. 7.Sinistri: denuncia. 8.No sub-noleggio. 9.Patente valida. 10.Chiavi €50. 11.Solo Ischia. 12.Assistenza meccanica. 13.Foro Napoli. 14.Privacy GDPR."
-ENG_14 = "1.Perfect condition. 2.Fines: customer. 3.Fee €25.83. 4.Damage/Theft: customer. 5.No drugs/alcohol. 6.Return time. 7.Accidents: report. 8.No sub-rental. 9.Valid license. 10.Lost keys €50. 11.Ischia only. 12.Mechanical help. 13.Court Naples. 14.Privacy GDPR."
+# I 14 PUNTI COMPLETI (Trascrizione fedele bilingue)
+TESTO_14_PUNTI = [
+    ("1. Il veicolo e consegnato in ottimo stato. / Vehicle delivered in excellent condition.", "2. Riconsegna con pieno di carburante. / Return with full tank."),
+    ("3. Responsabilita infrazioni C.d.S. a carico del cliente. / Driver liable for traffic fines.", "4. Spese gestione verbali: Euro 25.83. / Administrative fee for fines: Euro 25.83."),
+    ("5. Responsabilita danni e furto del cliente. / Customer liable for damage and theft.", "6. Divieto guida sotto effetto di alcool o droghe. / No driving under influence."),
+    ("7. Il noleggio termina alla data e ora indicata. / Rental ends at specified date and time.", "8. Obbligo di denuncia immediata in caso di sinistro. / Mandatory immediate accident report."),
+    ("9. Divieto di sub-noleggio o cessione del mezzo. / Sub-rental or vehicle transfer prohibited.", "10. Il cliente dichiara patente valida. / Customer declares valid driving license."),
+    ("11. Smarrimento chiavi penale Euro 50. / Lost keys penalty Euro 50.", "12. Il veicolo deve restare sull'isola di Ischia. / Vehicle must stay on Ischia island."),
+    ("13. Foro competente: Napoli - Sez. Ischia. / Jurisdiction: Naples - Ischia Court.", "14. Trattamento dati personali GDPR 679/2016. / GDPR Data protection policy.")
+]
 
 st.sidebar.title("🚀 MasterRent Ischia")
 aziende_res = supabase.table("aziende").select("*").execute()
@@ -30,18 +37,20 @@ lista_aziende = {a['nome_azienda']: a for a in aziende_res.data} if aziende_res.
 
 if lista_aziende:
     azienda = lista_aziende[st.sidebar.selectbox("Azienda", list(lista_aziende.keys()))]
-    menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Contratto", "🚨 Archivio & Multe", "🏦 Fatturazione Aruba"])
+    menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Contratto", "🚨 Archivio & Multe"])
 
     if menu == "📝 Nuovo Contratto":
         st.header(f"Contratto: {azienda['nome_azienda']}")
+        
         with st.expander("👤 DATI CLIENTE", expanded=True):
             c1, c2 = st.columns(2)
             cliente = c1.text_input("NOME E COGNOME")
-            telefono = c2.text_input("TELEFONO")
-            residenza = c1.text_input("RESIDENZA")
+            cf = c2.text_input("CODICE FISCALE")
+            luogo_nascita = c1.text_input("LUOGO DI NASCITA")
+            residenza = c2.text_input("RESIDENZA")
+            tipo_doc = c1.selectbox("TIPO DOC", ["Patente", "C.I."])
             num_doc = c2.text_input("NUMERO DOCUMENTO")
-            cf = c1.text_input("CODICE FISCALE")
-            luogo_nascita = c2.text_input("LUOGO NASCITA")
+            telefono = c1.text_input("TELEFONO (es. 39333...)")
 
         with st.expander("🛵 DATI NOLEGGIO", expanded=True):
             c3, c4 = st.columns(2)
@@ -50,59 +59,85 @@ if lista_aziende:
             prezzo_tot = st.number_input("PREZZO (€)", min_value=0)
 
         foto_p = st.camera_input("📸 FOTO PATENTE")
-        canvas = st_canvas(fill_color="white", stroke_width=2, height=150, key="sig")
+        st.subheader("✍️ Firma Cliente")
+        canvas = st_canvas(fill_color="white", stroke_width=2, stroke_color="black", background_color="white", height=150, key="sig")
 
-        if st.button("💾 SALVA TUTTO"):
+        if st.button("💾 SALVA E GENERA"):
             if cliente and targa and canvas.image_data is not None:
                 try:
-                    # Salva DB
-                    dat = {"cliente": cliente, "targa": targa, "telefono": telefono, "residenza": residenza, "num_doc": num_doc, "prezzo_tot": str(prezzo_tot), "km_uscita": km_uscita, "luogo_nascita": luogo_nascita, "azienda_id": azienda['id'], "data_inizio": str(datetime.date.today())}
-                    res = supabase.table("contratti").insert(dat).execute()
-                    id_c = res.data[0]['id']
+                    # 1. Inserimento Database
+                    dat = {
+                        "cliente": cliente, "cf": cf, "luogo_nascita": luogo_nascita, "residenza": residenza,
+                        "tipo_doc": tipo_doc, "num_doc": num_doc, "telefono": telefono, "targa": targa,
+                        "km_uscita": km_uscita, "prezzo_tot": str(prezzo_tot), "azienda_id": azienda['id'],
+                        "data_inizio": str(datetime.date.today())
+                    }
+                    res_db = supabase.table("contratti").insert(dat).execute()
+                    id_c = res_db.data[0]['id']
 
-                    # PDF & Foto
+                    # 2. Generazione PDF Professionale
                     pdf = fpdf.FPDF()
                     pdf.add_page()
-                    pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, txt=clean_t(f"Noleggio {azienda['nome_azienda']}"), ln=1)
-                    pdf.set_font("Arial", size=8); pdf.multi_cell(0, 4, txt=clean_t(f"Cliente: {cliente}\nDoc: {num_doc}\nTarga: {targa}"))
-                    pdf.ln(5); pdf.multi_cell(0, 3, clean_t(ITA_14 + "\n" + ENG_14))
+                    pdf.set_font("Arial", 'B', 16)
+                    pdf.cell(0, 10, txt=clean_t(azienda['nome_azienda']), ln=1, align='C')
+                    pdf.set_font("Arial", size=8)
+                    pdf.cell(0, 5, txt=clean_t("Via Cognole, 5 - 80075 Forio (NA) - P.IVA 10252601215"), ln=1, align='C')
+                    pdf.ln(5)
                     
-                    img_s = Image.fromarray(canvas.image_data.astype('uint8'), 'RGBA')
-                    img_s.save("f.png")
-                    pdf.image("f.png", x=10, w=35)
-                    pdf.output("c.pdf")
-
-                    # Upload
-                    supabase.storage.from_("contratti_media").upload(f"{id_c}_contratto.pdf", open("c.pdf", "rb").read())
+                    # Sezione Dati
+                    pdf.set_fill_color(240, 240, 240)
+                    pdf.set_font("Arial", 'B', 10)
+                    pdf.cell(0, 8, txt="DATI DEL CONTRATTO", ln=1, fill=True)
+                    pdf.set_font("Arial", size=9)
+                    info_txt = f"Cliente: {cliente}  |  CF: {cf}\nNato a: {luogo_nascita}  |  Residente: {residenza}\nDoc: {tipo_doc} - {num_doc}\nVeicolo: {targa}  |  KM Uscita: {km_uscita}  |  Prezzo: Euro {prezzo_tot}"
+                    pdf.multi_cell(0, 5, txt=clean_t(info_txt))
+                    
+                    # I 14 Punti
+                    pdf.ln(5)
+                    pdf.set_font("Arial", 'B', 9)
+                    pdf.cell(0, 6, txt="CONDIZIONI GENERALI / TERMS AND CONDITIONS", ln=1, border='B')
+                    pdf.set_font("Arial", size=7)
+                    for p1, p2 in TESTO_14_PUNTI:
+                        pdf.multi_cell(0, 4, txt=clean_t(f"{p1}\n{p2}"))
+                        pdf.ln(1)
+                    
+                    # Firma
+                    img_sig = Image.fromarray(canvas.image_data.astype('uint8'), 'RGBA')
+                    img_sig.save("f.png")
+                    pdf.ln(5)
+                    pdf.set_font("Arial", 'I', 8)
+                    pdf.cell(0, 5, txt="Firma per accettazione e clausole vessatorie (Art. 1341-1342 C.C.):", ln=1)
+                    pdf.image("f.png", x=10, w=45)
+                    
+                    pdf_name = f"Contratto_{targa}.pdf"
+                    pdf.output(pdf_name)
+                    
+                    # 3. Upload File
+                    with open(pdf_name, "rb") as f:
+                        supabase.storage.from_("contratti_media").upload(f"{id_c}_contratto.pdf", f.read())
                     if foto_p:
                         supabase.storage.from_("contratti_media").upload(f"{id_c}_patente.jpg", foto_p.getvalue())
 
                     st.success("✅ Salvato!")
-                    msg = urllib.parse.quote(f"Ciao {cliente}, contratto {targa} ok!")
-                    st.markdown(f'''<a href="https://wa.me/{telefono}?text={msg}" target="_blank"><button style="background-color:#25D366;color:white;border:none;padding:10px;border-radius:5px;">📲 WhatsApp</button></a>''', unsafe_allow_html=True)
+                    
+                    # WhatsApp
+                    msg = urllib.parse.quote(f"Ciao {cliente}, ecco la conferma per il noleggio della targa {targa}. Grazie!")
+                    st.markdown(f'''<a href="https://wa.me/{telefono}?text={msg}" target="_blank"><button style="background-color:#25D366;color:white;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;">📲 Invia su WhatsApp</button></a>''', unsafe_allow_html=True)
+                    with open(pdf_name, "rb") as f:
+                        st.download_button("📥 Scarica PDF", f, file_name=pdf_name)
                 except Exception as e:
                     st.error(f"Errore: {e}")
 
     elif menu == "🚨 Archivio & Multe":
-        st.header("🗄️ Archivio")
+        st.header("🗄️ Archivio Contratti")
         res = supabase.table("contratti").select("*").eq("azienda_id", azienda['id']).execute()
         if res.data:
             df = pd.DataFrame(res.data).sort_values(by='created_at', ascending=False)
-            sel = st.selectbox("Seleziona", df['cliente'] + " - " + df['targa'])
+            sel = st.selectbox("Cerca Cliente", df['cliente'] + " - " + df['targa'])
             c = df[(df['cliente'] + " - " + df['targa']) == sel].iloc[0]
             
-            # Controllo esistenza file prima di mostrare il tasto
             url_pdf = f"{url}/storage/v1/object/public/contratti_media/{c['id']}_contratto.pdf"
             url_img = f"{url}/storage/v1/object/public/contratti_media/{c['id']}_patente.jpg"
             
-            col1, col2 = st.columns(2)
-            if requests.head(url_pdf).status_code == 200:
-                col1.link_button("📄 Vedi Contratto", url_pdf)
-            else:
-                col1.warning("Contratto PDF non trovato")
-                
-            if requests.head(url_img).status_code == 200:
-                col2.link_button("🪪 Vedi Patente", url_img)
-            else:
-                col2.info("Foto patente non presente")
-
+            st.link_button("📄 Vedi Contratto Completo", url_pdf)
+            st.link_button("🪪 Vedi Foto Patente", url_img)
