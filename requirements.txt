@@ -1,4 +1,6 @@
-fpdf
 streamlit
-Pillow
+pandas
 supabase
+fpdf
+streamlit-drawable-canvas
+Pillow
