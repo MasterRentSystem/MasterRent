@@ -18,15 +18,15 @@ def clean_t(text):
     for k, v in repls.items(): text = text.replace(k, v)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-# TESTO LEGALE INTEGRALE (14 PUNTI)
-TESTO_LEGALE = """1. Consegna veicolo in ottimo stato, riconsegna con pieno carburante. 2. Cliente responsabile infrazioni C.d.S. 3. Addebito Euro 25.83 per gestione amministrativa verbali. 4. Responsabilita danni, furto e incendio a carico del cliente. 5. Divieto trasporto persone eccedenti e guida in stato di ebbrezza o sotto effetto di stupefacenti. 6. Noleggio termina alla data/ora indicata. 7. In caso di sinistro, obbligo denuncia immediata e raccolta dati controparte. 8. Divieto sub-noleggio. 9. Il cliente dichiara di avere la patente valida. 10. Smarrimento chiavi: penale Euro 50. 11. Il veicolo non puo uscire dall'isola di Ischia. 12. Assistenza stradale a carico del cliente se causata da negligenza. 13. Foro competente: Napoli - Sezione distaccata Ischia. 14. Informativa Privacy: I dati sono trattati secondo il GDPR 679/2016 per finalita contrattuali."""
+# 14 PUNTI ORIGINALI
+TESTO_LEGALE = """1. Veicolo in ottimo stato, riconsegna con pieno. 2. Cliente responsabile infrazioni C.d.S. 3. Euro 25.83 spese gestione verbali. 4. Danni/Furto/Incendio a carico cliente. 5. No sovrappeso, no alcool/droghe. 6. Riconsegna entro data/ora stabilita. 7. Sinistri: denuncia immediata. 8. No sub-noleggio. 9. Patente valida obbligatoria. 10. Smarrimento chiavi: Euro 50. 11. Solo Isola di Ischia. 12. Assistenza gratuita solo per guasti meccanici. 13. Foro: Napoli-Ischia. 14. Privacy: Dati trattati ai sensi del GDPR 679/2016."""
 
 st.sidebar.title("🚀 MasterRent Ischia")
 aziende_res = supabase.table("aziende").select("*").execute()
 lista_aziende = {a['nome_azienda']: a for a in aziende_res.data} if aziende_res.data else {}
 
 if lista_aziende:
-    nome_scelto = st.sidebar.selectbox("Seleziona Azienda", list(lista_aziende.keys()))
+    nome_scelto = st.sidebar.selectbox("Azienda", list(lista_aziende.keys()))
     azienda = lista_aziende[nome_scelto]
     menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Contratto", "🚨 Archivio & Multe", "🏦 Fatturazione Aruba"])
 
@@ -34,83 +34,80 @@ if lista_aziende:
         st.header(f"Contratto: {azienda['nome_azienda']}")
         
         with st.expander("👤 DATI CLIENTE", expanded=True):
-            col1, col2 = st.columns(2)
-            nome = col1.text_input("NOME E COGNOME")
-            cf = col2.text_input("CODICE FISCALE / P.IVA")
-            residenza = col1.text_input("RESIDENZA COMPLETA")
-            doc_dati = col2.text_input("DOCUMENTO (Tipo e Numero)")
-            tel = col1.text_input("TELEFONO")
+            cliente = st.text_input("NOME E COGNOME")
+            cf = st.text_input("CODICE FISCALE")
+            luogo_nascita = st.text_input("LUOGO DI NASCITA")
+            residenza = st.text_input("RESIDENZA")
+            col_doc1, col_doc2 = st.columns(2)
+            tipo_doc = col_doc1.selectbox("TIPO DOCUMENTO", ["Patente", "C.I.", "Passaporto"])
+            num_doc = col_doc2.text_input("NUMERO DOCUMENTO")
+            telefono = st.text_input("TELEFONO")
 
         with st.expander("🛵 DATI NOLEGGIO", expanded=True):
-            col3, col4 = st.columns(2)
-            targa = col3.text_input("TARGA VEICOLO")
-            prezzo = col4.number_input("CORRISPETTIVO (Euro)", min_value=0)
-            inizio = col3.date_input("INIZIO", datetime.date.today())
-            fine = col4.date_input("FINE", datetime.date.today() + datetime.timedelta(days=1))
+            col_n1, col_n2 = st.columns(2)
+            targa = col_n1.text_input("TARGA")
+            km_uscita = col_n2.text_input("KM USCITA", value="0")
+            prezzo_tot = st.number_input("PREZZO TOTALE (€)", min_value=0)
+            data_inizio = st.date_input("DATA INIZIO", datetime.date.today())
 
-        st.camera_input("📸 SCATTA FOTO PATENTE")
+        st.camera_input("📸 FOTO PATENTE")
+        st.checkbox("Accetto i 14 punti e la Privacy")
         
-        st.subheader("📖 Condizioni Generali e Privacy")
-        st.text_area("Termini (1-14)", value=TESTO_LEGALE, height=180)
-        accetto = st.checkbox("Accetto i 14 punti e il trattamento dei dati (Privacy)")
+        st.subheader("✍️ Firma Cliente")
+        canvas = st_canvas(fill_color="white", stroke_width=2, stroke_color="black", background_color="white", height=150, key="sig")
 
-        st.subheader("✍️ Firma Legale del Cliente")
-        canvas_result = st_canvas(fill_color="white", stroke_width=2, stroke_color="black", background_color="white", height=150, key="sig_legale")
-
-        if st.button("💾 GENERA CONTRATTO LEGALE"):
-            if nome and targa and accetto and canvas_result.image_data is not None:
-                # Salva su DB
-                payload = {"cliente": nome, "cf": cf, "targa": targa, "data_inizio": str(inizio), "azienda_id": azienda['id'], "residenza": residenza, "documento": doc_dati, "prezzo_tot": str(prezzo)}
-                supabase.table("contratti").insert(payload).execute()
-
-                # Genera PDF
-                pdf = fpdf.FPDF()
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 14)
-                pdf.cell(0, 10, txt=clean_t("Noleggio BATTAGLIA MARIANNA"), ln=1)
-                pdf.set_font("Arial", size=8)
-                pdf.cell(0, 5, txt="Via Cognole, 5 - 80075 Forio (NA) - P.IVA 10252601215", ln=1)
-                pdf.ln(8)
-
-                # Riepilogo
-                pdf.set_font("Arial", 'B', 10)
-                pdf.cell(0, 8, txt="ESTREMI DEL CONTRATTO", ln=1, border='B')
-                pdf.set_font("Arial", size=9)
-                pdf.multi_cell(0, 5, txt=clean_t(f"Cliente: {nome}\nCF/PIVA: {cf}\nResidenza: {residenza}\nDoc: {doc_dati}\nVeicolo: {targa}\nPeriodo: {inizio} al {fine}\nPrezzo: Euro {prezzo}"))
+        if st.button("💾 SALVA E GENERA CONTRATTO"):
+            if cliente and targa and canvas.image_data is not None:
+                # NOMI COLONNE IDENTICI A SUPABASE
+                payload = {
+                    "cliente": cliente,
+                    "cf": cf,
+                    "luogo_nascita": luogo_nascita,
+                    "residenza": residenza,
+                    "tipo_doc": tipo_doc,
+                    "num_doc": num_doc,
+                    "telefono": telefono,
+                    "targa": targa,
+                    "km_uscita": km_uscita,
+                    "prezzo_tot": str(prezzo_tot),
+                    "data_inizio": str(data_inizio),
+                    "azienda_id": azienda['id']
+                }
                 
-                # Testo Legale Piccolo
-                pdf.ln(5)
-                pdf.set_font("Arial", 'B', 8)
-                pdf.cell(0, 5, txt="CONDIZIONI GENERALI DI CONTRATTO (ARTT. 1-14)", ln=1)
-                pdf.set_font("Arial", size=7)
-                pdf.multi_cell(0, 4, txt=clean_t(TESTO_LEGALE))
-                
-                # Firma nel PDF
-                if canvas_result.image_data is not None:
-                    img = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
-                    img_byte_arr = io.BytesIO()
-                    img.save(img_byte_arr, format='PNG')
-                    with open("temp_firma.png", "wb") as f:
-                        f.write(img_byte_arr.getvalue())
+                try:
+                    supabase.table("contratti").insert(payload).execute()
                     
-                    pdf.ln(10)
-                    pdf.set_font("Arial", 'I', 8)
-                    pdf.cell(0, 5, txt="Firma per accettazione e clausole vessatorie (Art. 1341-1342 C.C.):", ln=1)
-                    pdf.image("temp_firma.png", x=10, w=45)
-
-                name = f"Contratto_{targa}.pdf"
-                pdf.output(name)
-                st.success("✅ Contratto Legale Generato!")
-                with open(name, "rb") as f:
-                    st.download_button("📥 Scarica PDF", f, file_name=name)
+                    # Generazione PDF
+                    pdf = fpdf.FPDF()
+                    pdf.add_page()
+                    pdf.set_font("Arial", 'B', 15)
+                    pdf.cell(0, 10, txt=clean_t(f"Noleggio {azienda['nome_azienda']}"), ln=1)
+                    pdf.set_font("Arial", size=9)
+                    info = f"Cliente: {cliente}\nCF: {cf}\nNato a: {luogo_nascita}\nResidenza: {residenza}\nDoc: {tipo_doc} {num_doc}\nTel: {telefono}\nTarga: {targa} | KM: {km_uscita}\nPrezzo: Euro {prezzo_tot}"
+                    pdf.multi_cell(0, 5, txt=clean_t(info))
+                    pdf.ln(5)
+                    pdf.set_font("Arial", size=7)
+                    pdf.multi_cell(0, 4, txt=clean_t(TESTO_LEGALE))
+                    
+                    # Firma
+                    img = Image.fromarray(canvas.image_data.astype('uint8'), 'RGBA')
+                    img.save("f.png")
+                    pdf.image("f.png", x=10, w=40)
+                    
+                    pdf.output("contratto.pdf")
+                    st.success("✅ Salvato correttamente su Supabase!")
+                    with open("contratto.pdf", "rb") as f:
+                        st.download_button("📥 Scarica PDF", f, file_name=f"Contratto_{targa}.pdf")
+                except Exception as e:
+                    st.error(f"Errore durante il salvataggio: {e}")
             else:
-                st.error("Firma e accetta i termini per proseguire!")
+                st.error("Dati obbligatori mancanti (Nome, Targa o Firma)!")
 
     elif menu == "🚨 Archivio & Multe":
-        st.header("Moduli Vigili")
-        st.write("Seleziona un contratto per generare la comunicazione dati conducente.")
+        st.header("Gestione Verbali")
+        st.write("Seleziona contratto per modulo Vigili.")
 
     elif menu == "🏦 Fatturazione Aruba":
         st.header("Aruba SDI")
-        st.write("Pronto per l'invio fattura.")
+        st.write("Pronto per l'invio.")
 
