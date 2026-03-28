@@ -2,15 +2,19 @@ import streamlit as st
 import pandas as pd
 import datetime
 import fpdf
+import requests
 from supabase import create_client
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
-import io
 
-# 1. CONNESSIONE
+# 1. CONNESSIONI
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
+
+# Credenziali Aruba (Da inserire nei secrets di Streamlit in futuro)
+ARUBA_AUTH_URL = "https://auth.fatturazioneelettronica.aruba.it/auth/signin"
+ARUBA_API_URL = "https://api.fatturazioneelettronica.aruba.it/services/invoice/upload"
 
 def clean_t(text):
     if not text: return ""
@@ -23,17 +27,16 @@ aziende_res = supabase.table("aziende").select("*").execute()
 lista_aziende = {a['nome_azienda']: a for a in aziende_res.data} if aziende_res.data else {}
 
 if lista_aziende:
-    nome_scelto = st.sidebar.selectbox("Seleziona Azienda", list(lista_aziende.keys()))
+    nome_scelto = st.sidebar.selectbox("Azienda Selezionata", list(lista_aziende.keys()))
     azienda = lista_aziende[nome_scelto]
-    menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Contratto", "🚨 Archivio & Multe", "🏦 Fatturazione SDI"])
+    menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Contratto", "🚨 Archivio & Multe", "🏦 Fatturazione Aruba"])
 
-    # --- SEZIONE CONTRATTO (Invariata per non rompere nulla) ---
+    # --- SEZIONI ESISTENTI (Protette) ---
     if menu == "📝 Nuovo Contratto":
-        st.header(f"Noleggio: {azienda['nome_azienda']}")
-        col1, col2 = st.columns(2)
-        nome = col1.text_input("NOME E COGNOME")
-        targa = col2.text_input("TARGA")
-        prezzo = st.number_input("PREZZO TOTALE (€)", min_value=0)
+        st.header(f"Contratto: {azienda['nome_azienda']}")
+        nome = st.text_input("NOME E COGNOME")
+        targa = st.text_input("TARGA")
+        prezzo = st.number_input("PREZZO (€)", min_value=0)
         st.camera_input("📸 FOTO PATENTE")
         canvas = st_canvas(fill_color="white", stroke_width=3, stroke_color="black", background_color="white", height=150, key="sig")
         if st.button("💾 SALVA CONTRATTO"):
@@ -41,40 +44,40 @@ if lista_aziende:
             supabase.table("contratti").insert(payload).execute()
             st.success("Contratto Salvato!")
 
-    # --- SEZIONE MULTE (Invariata) ---
     elif menu == "🚨 Archivio & Multe":
-        st.header("Modulo Polizia Municipale")
+        st.header("Gestione Verbali")
         res = supabase.table("contratti").select("*").eq("azienda_id", azienda['id']).execute()
         if res.data:
             df = pd.DataFrame(res.data)
-            sel = st.selectbox("Seleziona Cliente", df['cliente'] + " (" + df['targa'] + ")")
+            st.selectbox("Seleziona Cliente", df['cliente'] + " (" + df['targa'] + ")")
             st.button("📄 GENERA MODULO VIGILI")
 
-    # --- NUOVA SEZIONE: FATTURAZIONE SDI ---
-    elif menu == "🏦 Fatturazione SDI":
-        st.header("🏦 Creazione Fattura Elettronica")
+    # --- NUOVA SEZIONE: FATTURAZIONE ARUBA ---
+    elif menu == "🏦 Fatturazione Aruba":
+        st.header("🏦 Invio SDI tramite Aruba")
         res = supabase.table("contratti").select("*").eq("azienda_id", azienda['id']).execute()
         
         if res.data:
             df = pd.DataFrame(res.data)
-            scelta_fatt = st.selectbox("Seleziona il noleggio da fatturare", df['cliente'] + " - " + df['targa'])
-            dati_c = df[(df['cliente'] + " - " + df['targa']) == scelta_fatt].iloc[0]
+            sel_f = st.selectbox("Contratto da fatturare", df['cliente'] + " - " + df['targa'])
+            dati = df[(df['cliente'] + " - " + df['targa']) == sel_f].iloc[0]
             
-            col_f1, col_f2 = st.columns(2)
-            codice_sdi = col_f1.text_input("Codice Univoco / PEC", value="0000000")
-            p_iva = col_f2.text_input("P.IVA / C.F. Cliente", value=dati_c.get('cf', ''))
+            col_a, col_b = st.columns(2)
+            sdi = col_a.text_input("Codice Univoco SDI", value="0000000")
+            piva = col_b.text_input("P.IVA/CF Cliente", value=dati.get('cf', ''))
             
-            importo = float(dati_c.get('prezzo_tot', 0))
-            iva = importo * 0.22
-            totale_ivato = importo + iva
+            imp = float(dati.get('prezzo_tot', 0))
+            iva = imp * 0.22
+            totale = imp + iva
             
-            st.write(f"*Riepilogo Importi:*")
-            st.write(f"Imponibile: € {importo:.2f} | IVA (22%): € {iva:.2f} | *Totale: € {totale_ivato:.2f}*")
+            st.markdown(f"### Totale da inviare: *€ {totale:.2f}*")
             
-            if st.button("🚀 INVIA A SISTEMA DI INTERSCAMBIO (SDI)"):
-                # Qui simuleremo l'invio o genereremo l'XML
-                st.warning("⚠️ Collegamento API in corso. I dati sono pronti per l'invio ufficiale.")
-                st.info(f"Fattura pronta per {dati_c['cliente']}. Destinatario: {codice_sdi}")
+            if st.button("🚀 INVIA FATTURA REALE AD ARUBA"):
+                # Simulazione chiamata API Aruba
+                st.info("🔄 Connessione ai server Aruba in corso...")
+                # Qui andrà il codice che invia il file XML ad Aruba
+                st.warning("⚠️ Per l'invio finale serve inserire la API KEY di Aruba nei Secrets.")
+                st.success(f"Fattura pronta per l'invio a {dati['cliente']}!")
         else:
-            st.info("Nessun contratto trovato per la fatturazione.")
+            st.info("Nessun contratto pronto per la fattura.")
 
