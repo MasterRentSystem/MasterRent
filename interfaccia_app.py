@@ -7,7 +7,6 @@ from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 import io
 import urllib.parse
-import requests
 
 # 1. CONNESSIONE
 url = st.secrets["SUPABASE_URL"]
@@ -20,22 +19,22 @@ def clean_t(text):
     for k, v in repls.items(): text = text.replace(k, v)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-# 14 PUNTI INTEGRALI
-TESTO_14 = [
-    "1. Veicolo consegnato in ottimo stato con pieno. / Vehicle delivered in excellent condition with full tank.",
-    "2. Riconsegna con pieno di carburante. / Return with a full tank of fuel.",
-    "3. Cliente responsabile infrazioni C.d.S. / Customer liable for all traffic fines.",
-    "4. Spese gestione verbali: Euro 25.83. / Administrative fee for fines: Euro 25.83.",
-    "5. Responsabilita danni e furto del cliente. / Customer liable for damage and theft.",
-    "6. Divieto guida sotto alcool o droghe. / No driving under influence of alcohol or drugs.",
-    "7. Noleggio termina alla data/ora indicata. / Rental ends at the specified date/time.",
-    "8. Obbligo denuncia immediata in caso di sinistro. / Mandatory immediate accident report.",
-    "9. Divieto di sub-noleggio. / Sub-rental is strictly prohibited.",
-    "10. Il cliente dichiara patente valida. / Customer declares a valid driving license.",
-    "11. Smarrimento chiavi: penale Euro 50. / Lost keys penalty: Euro 50.",
-    "12. Mezzo solo per l'isola di Ischia. / Vehicle for Ischia Island use only.",
-    "13. Foro competente: Napoli-Sez. Ischia. / Jurisdiction: Naples-Ischia Court.",
-    "14. Trattamento dati GDPR 679/2016. / Personal data processing GDPR 679/2016."
+# 14 PUNTI ORIGINALI + PRIVACY
+TESTO_LEGALE = [
+    "1. Veicolo in ottimo stato con pieno. / Vehicle in excellent condition with full tank.",
+    "2. Riconsegna obbligatoria con pieno. / Return with full tank mandatory.",
+    "3. Cliente responsabile infrazioni C.d.S. / Customer liable for traffic fines.",
+    "4. Spese gestione verbali: Euro 25.83. / Admin fee for fines: Euro 25.83.",
+    "5. Responsabilita danni/furto del cliente. / Customer liable for damage/theft.",
+    "6. No guida sotto alcool/droghe. / No driving under influence.",
+    "7. Termine noleggio data/ora indicata. / Rental ends at agreed date/time.",
+    "8. Denuncia immediata sinistri. / Immediate accident report required.",
+    "9. Divieto di sub-noleggio. / Sub-rental strictly prohibited.",
+    "10. Patente valida dichiarata. / Valid driving license declared.",
+    "11. Penale chiavi perse: Euro 50. / Lost keys penalty: Euro 50.",
+    "12. Solo Isola di Ischia. / For Ischia Island use only.",
+    "13. Foro: Napoli-Sez. Ischia. / Jurisdiction: Naples-Ischia Court.",
+    "14. Privacy: Dati trattati ai sensi del GDPR 679/2016. / Data processed per GDPR."
 ]
 
 st.sidebar.title("🚀 MasterRent Ischia")
@@ -44,10 +43,11 @@ lista_aziende = {a['nome_azienda']: a for a in aziende_res.data} if aziende_res.
 
 if lista_aziende:
     azienda = lista_aziende[st.sidebar.selectbox("Azienda", list(lista_aziende.keys()))]
-    menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Contratto", "🚨 Archivio & Multe"])
+    menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Contratto", "🚨 Archivio"])
 
     if menu == "📝 Nuovo Contratto":
         st.header(f"Contratto: {azienda['nome_azienda']}")
+        
         with st.expander("👤 DATI CLIENTE", expanded=True):
             c1, c2 = st.columns(2)
             cliente = c1.text_input("NOME E COGNOME")
@@ -63,53 +63,53 @@ if lista_aziende:
             km_uscita = c4.text_input("KM USCITA", value="0")
             prezzo_tot = st.number_input("PREZZO (€)", min_value=0)
 
-        foto_p = st.camera_input("📸 SCATTA FOTO PATENTE")
+        foto_p = st.camera_input("📸 FOTO PATENTE")
+        st.subheader("✍️ Firma Legale")
         canvas = st_canvas(fill_color="white", stroke_width=2, height=150, key="sig")
 
-        if st.button("💾 SALVA E GENERA"):
+        if st.button("💾 SALVA E INVIA"):
             if cliente and targa and canvas.image_data is not None:
                 try:
-                    # 1. Database
+                    # SALVATAGGIO DB
                     dat = {"cliente": cliente, "cf": cf, "residenza": residenza, "luogo_nascita": luogo_nascita, "num_doc": num_doc, "telefono": telefono, "targa": targa, "km_uscita": km_uscita, "prezzo_tot": str(prezzo_tot), "azienda_id": azienda['id'], "data_inizio": str(datetime.date.today())}
                     res = supabase.table("contratti").insert(dat).execute()
                     id_c = res.data[0]['id']
 
-                    # 2. PDF Legale
+                    # GENERAZIONE PDF
                     pdf = fpdf.FPDF()
                     pdf.add_page()
-                    pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, txt=clean_t(azienda['nome_azienda']), ln=1, align='C')
-                    pdf.set_font("Arial", size=8); pdf.cell(0, 5, txt="P.IVA 10252601215 - Via Cognole, 5 - Forio (NA)", ln=1, align='C')
+                    pdf.set_font("Arial", 'B', 15); pdf.cell(0, 10, txt=clean_t(azienda['nome_azienda']), ln=1, align='C')
+                    pdf.set_font("Arial", size=8); pdf.cell(0, 5, txt="MasterRent - Via Cognole, 5 - Forio (NA) - P.IVA 10252601215", ln=1, align='C')
                     pdf.ln(5)
-                    pdf.set_font("Arial", 'B', 10); pdf.cell(0, 8, "DATI CONTRAENTE E VEICOLO", ln=1, border='B')
+                    pdf.set_font("Arial", 'B', 10); pdf.cell(0, 8, "DETTAGLI CONTRATTUALI", ln=1, border='B')
                     pdf.set_font("Arial", size=9)
                     pdf.multi_cell(0, 5, txt=clean_t(f"Cliente: {cliente} | CF: {cf}\nNato a: {luogo_nascita} | Residente: {residenza}\nDoc: {num_doc} | Targa: {targa} | KM: {km_uscita}\nPrezzo: Euro {prezzo_tot}"))
                     
-                    pdf.ln(3); pdf.set_font("Arial", 'B', 8); pdf.cell(0, 5, "CONDIZIONI GENERALI / TERMS AND CONDITIONS", ln=1)
+                    pdf.ln(3); pdf.set_font("Arial", 'B', 8); pdf.cell(0, 5, "CONDIZIONI (1-14) & PRIVACY", ln=1)
                     pdf.set_font("Arial", size=7)
-                    for p in TESTO_14:
-                        pdf.multi_cell(0, 3.5, txt=clean_t(p))
+                    for p in TESTO_LEGALE: pdf.multi_cell(0, 3.5, txt=clean_t(p))
                     
                     img_s = Image.fromarray(canvas.image_data.astype('uint8'), 'RGBA')
                     img_s.save("f.png")
-                    pdf.ln(4); pdf.set_font("Arial", 'I', 7); pdf.cell(0, 5, "Firma ai sensi degli Art. 1341-1342 C.C.:", ln=1)
+                    pdf.ln(4); pdf.set_font("Arial", 'I', 7); pdf.cell(0, 5, "Firma ai sensi degli Art. 1341-1342 C.C. e Privacy GDPR:", ln=1)
                     pdf.image("f.png", x=10, w=35)
-                    pdf.output("c.pdf")
+                    pdf_name = f"Contratto_{targa}.pdf"
+                    pdf.output(pdf_name)
 
-                    # 3. Upload
-                    supabase.storage.from_("contratti_media").upload(f"{id_c}_c.pdf", open("c.pdf", "rb").read())
-                    if foto_p:
-                        supabase.storage.from_("contratti_media").upload(f"{id_c}_p.jpg", foto_p.getvalue())
+                    # STORAGE
+                    supabase.storage.from_("contratti_media").upload(f"{id_c}_c.pdf", open(pdf_name, "rb").read())
+                    if foto_p: supabase.storage.from_("contratti_media").upload(f"{id_c}_p.jpg", foto_p.getvalue())
 
-                    st.success("✅ Salvato con successo!")
-                    # WhatsApp Button
-                    msg = urllib.parse.quote(f"Ciao {cliente}, ecco il contratto per {targa}. Grazie da MasterRent!")
-                    st.markdown(f'''<a href="https://wa.me/{telefono}?text={msg}" target="_blank"><button style="background-color:#25D366;color:white;border:none;padding:10px 20px;border-radius:5px;">📲 Invia WhatsApp</button></a>''', unsafe_allow_html=True)
-                    with open("c.pdf", "rb") as f:
-                        st.download_button("📥 Scarica PDF", f, file_name=f"Contratto_{targa}.pdf")
+                    st.success("✅ Contratto salvato e archiviato!")
+                    
+                    # WHATSAPP
+                    msg = urllib.parse.quote(f"Ciao {cliente}, ecco il tuo contratto per {targa}. Grazie da MasterRent!")
+                    st.markdown(f'''<a href="https://wa.me/{telefono}?text={msg}" target="_blank"><button style="background-color:#25D366;color:white;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;">📲 Invia WhatsApp al Cliente</button></a>''', unsafe_allow_html=True)
+                    with open(pdf_name, "rb") as f: st.download_button("📥 Scarica PDF", f, file_name=pdf_name)
                 except Exception as e:
-                    st.error(f"Errore: {e}")
+                    st.error(f"Errore 403? Esegui il comando SQL su Supabase! Dettaglio: {e}")
 
-    elif menu == "🚨 Archivio & Multe":
+    elif menu == "🚨 Archivio":
         st.header("🗄️ Archivio")
         res = supabase.table("contratti").select("*").eq("azienda_id", azienda['id']).execute()
         if res.data:
