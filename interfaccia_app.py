@@ -19,9 +19,9 @@ def clean_t(text):
     for k, v in repls.items(): text = text.replace(k, v)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-# TESTI LEGALI BILINGUE
-ITA_14 = """1. Stato veicolo ottimo. 2. Infrazioni CdS cliente. 3. Gestione multe €25.83. 4. Danni/Furto cliente. 5. No alcool. 6. Riconsegna puntuale. 7. Sinistri: denuncia. 8. No sub-noleggio. 9. Patente valida. 10. Chiavi perse €50. 11. Solo Ischia. 12. Soccorso solo guasti. 13. Foro Napoli. 14. Privacy GDPR."""
-ENG_14 = """1. Perfect condition. 2. Traffic fines: customer. 3. Admin fee €25.83. 4. Damage/Theft: customer. 5. No alcohol. 6. On-time return. 7. Accidents: report. 8. No sub-rental. 9. Valid license. 10. Lost keys €50. 11. Ischia only. 12. Assistance: mechanical only. 13. Court: Naples. 14. Privacy GDPR."""
+# TESTI LEGALI (Versione Compatta per PDF)
+ITA_14 = "1.Pieno/Ottimo stato. 2.Multe cliente. 3.Gestione €25.83. 4.Danni/Furto/Incendio cliente. 5.No alcool/droghe. 6.Termine contratto. 7.Sinistri:denuncia. 8.No subnoleggio. 9.Patente valida. 10.Chiavi €50. 11.Solo Ischia. 12.Assistenza meccanica. 13.Foro Napoli. 14.Privacy GDPR."
+ENG_14 = "1.Full tank. 2.Fines: customer. 3.Fee €25.83. 4.Damage/Theft/Fire: customer. 5.No drugs/alcohol. 6.Return time. 7.Accidents: report. 8.No sub-rental. 9.Valid license. 10.Lost keys €50. 11.Ischia only. 12.Mechanical help. 13.Court Naples. 14.Privacy GDPR."
 
 st.sidebar.title("🚀 MasterRent Ischia")
 aziende_res = supabase.table("aziende").select("*").execute()
@@ -35,76 +35,76 @@ if lista_aziende:
         st.header(f"Contratto: {azienda['nome_azienda']}")
         
         with st.expander("👤 DATI CLIENTE", expanded=True):
-            cliente = st.text_input("NOME E COGNOME")
-            telefono = st.text_input("TELEFONO")
-            residenza = st.text_input("RESIDENZA")
-            num_doc = st.text_input("NUMERO DOCUMENTO")
-            cf = st.text_input("CODICE FISCALE")
+            col_a, col_b = st.columns(2)
+            cliente = col_a.text_input("NOME E COGNOME")
+            telefono = col_b.text_input("TELEFONO")
+            residenza = col_a.text_input("RESIDENZA")
+            num_doc = col_b.text_input("NUMERO DOCUMENTO")
+            cf = col_a.text_input("CODICE FISCALE")
+            luogo_nascita = col_b.text_input("LUOGO NASCITA")
 
         with st.expander("🛵 DATI NOLEGGIO", expanded=True):
-            targa = st.text_input("TARGA")
-            km_uscita = st.text_input("KM USCITA", value="0")
+            col_c, col_d = st.columns(2)
+            targa = col_c.text_input("TARGA")
+            km_uscita = col_d.text_input("KM USCITA", value="0")
             prezzo_tot = st.number_input("PREZZO (€)", min_value=0)
 
         foto_patente = st.camera_input("📸 SCATTA FOTO PATENTE")
-        
-        st.subheader("✍️ Firma")
+        st.subheader("✍️ Firma Cliente")
         canvas = st_canvas(fill_color="white", stroke_width=2, stroke_color="black", background_color="white", height=150, key="sig")
 
-        if st.button("💾 SALVA TUTTO (Contratto + Foto)"):
-            if cliente and targa and foto_patente and canvas.image_data is not None:
-                # 1. Salva dati su DB
-                payload = {"cliente": cliente, "targa": targa, "telefono": telefono, "residenza": residenza, "num_doc": num_doc, "prezzo_tot": str(prezzo_tot), "km_uscita": km_uscita, "azienda_id": azienda['id'], "data_inizio": str(datetime.date.today())}
-                res_db = supabase.table("contratti").insert(payload).execute()
-                id_contratto = res_db.data[0]['id']
+        if st.button("💾 SALVA E GENERA"):
+            if cliente and targa and canvas.image_data is not None:
+                try:
+                    # 1. Salva DB
+                    p = {"cliente": cliente, "targa": targa, "telefono": telefono, "residenza": residenza, "num_doc": num_doc, "prezzo_tot": str(prezzo_tot), "km_uscita": km_uscita, "luogo_nascita": luogo_nascita, "azienda_id": azienda['id'], "data_inizio": str(datetime.date.today())}
+                    res_db = supabase.table("contratti").insert(p).execute()
+                    id_c = res_db.data[0]['id']
 
-                # 2. Upload Foto Patente su Storage
-                foto_bytes = foto_patente.getvalue()
-                supabase.storage.from_("contratti_media").upload(f"{id_contratto}_patente.jpg", foto_bytes)
+                    # 2. Upload Foto (se presente)
+                    if foto_patente:
+                        supabase.storage.from_("contratti_media").upload(f"{id_c}_patente.jpg", foto_patente.getvalue())
 
-                # 3. Genera PDF
-                pdf = fpdf.FPDF()
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, txt=clean_t(f"Noleggio {azienda['nome_azienda']}"), ln=1)
-                pdf.set_font("Arial", size=9); pdf.multi_cell(0, 5, txt=clean_t(f"Cliente: {cliente}\nDoc: {num_doc}\nTarga: {targa}"))
-                pdf.ln(5); pdf.set_font("Arial", size=7); pdf.multi_cell(0, 4, txt=clean_t(ITA_14 + "\n" + ENG_14))
-                
-                # Inserisce Firma nel PDF
-                img_sig = Image.fromarray(canvas.image_data.astype('uint8'), 'RGBA')
-                img_sig.save("f.png")
-                pdf.image("f.png", x=10, w=40)
-                
-                pdf_name = f"Contratto_{targa}.pdf"
-                pdf.output(pdf_name)
-                
-                # 4. Upload PDF su Storage
-                with open(pdf_name, "rb") as f:
-                    supabase.storage.from_("contratti_media").upload(f"{id_contratto}_contratto.pdf", f.read())
+                    # 3. PDF
+                    pdf = fpdf.FPDF()
+                    pdf.add_page()
+                    pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, txt=clean_t(f"Noleggio {azienda['nome_azienda']}"), ln=1)
+                    pdf.set_font("Arial", size=8); pdf.multi_cell(0, 4, txt=clean_t(f"Cliente: {cliente}\nCF: {cf}\nDoc: {num_doc}\nTarga: {targa}\nKM: {km_uscita}"))
+                    pdf.ln(5); pdf.set_font("Arial", 'B', 7); pdf.cell(0, 4, "ITA:", ln=1); pdf.set_font("Arial", size=6); pdf.multi_cell(0, 3, clean_t(ITA_14))
+                    pdf.ln(2); pdf.set_font("Arial", 'B', 7); pdf.cell(0, 4, "ENG:", ln=1); pdf.set_font("Arial", size=6); pdf.multi_cell(0, 3, clean_t(ENG_14))
+                    
+                    img_sig = Image.fromarray(canvas.image_data.astype('uint8'), 'RGBA')
+                    img_sig.save("f.png")
+                    pdf.ln(5); pdf.image("f.png", x=10, w=35)
+                    
+                    p_name = f"Contratto_{targa}.pdf"
+                    pdf.output(p_name)
+                    
+                    # 4. Upload PDF
+                    with open(p_name, "rb") as f:
+                        supabase.storage.from_("contratti_media").upload(f"{id_c}_contratto.pdf", f.read())
 
-                st.success("✅ Tutto salvato in archivio!")
-                
-                # WhatsApp
-                msg = urllib.parse.quote(f"Ciao {cliente}, contratto {targa} registrato. Grazie!")
-                st.markdown(f'''<a href="https://wa.me/{telefono}?text={msg}" target="_blank"><button style="background-color: #25D366; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">📲 WhatsApp Cliente</button></a>''', unsafe_allow_html=True)
+                    st.success("✅ Salvataggio Completato!")
+                    
+                    # WhatsApp
+                    msg = urllib.parse.quote(f"Ciao {cliente}, ecco la conferma per {targa}. Grazie da MasterRent!")
+                    st.markdown(f'''<a href="https://wa.me/{telefono}?text={msg}" target="_blank"><button style="background-color: #25D366; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">📲 WhatsApp Cliente</button></a>''', unsafe_allow_html=True)
+                    with open(p_name, "rb") as f:
+                        st.download_button("📥 Scarica PDF", f, file_name=p_name)
+                except Exception as e:
+                    st.error(f"Errore: {e}. Hai creato il bucket 'contratti_media' su Supabase?")
             else:
-                st.error("Mancano dati, foto o firma!")
+                st.error("Dati obbligatori mancanti!")
 
     elif menu == "🚨 Archivio & Multe":
-        st.header("🗄️ Archivio Documenti")
-        res = supabase.table("contratti").select("*").eq("azienda_id", azienda['id']).execute()
+        st.header("🗄️ Archivio")
+        res = supabase.table("contratti").select("*").eq("azienda_id", azienda['id']).order('created_at', descending=True).execute()
         if res.data:
             df = pd.DataFrame(res.data)
-            scelta = st.selectbox("Seleziona Noleggio", df['cliente'] + " (" + df['targa'] + ")")
-            c_sel = df[(df['cliente'] + " (" + df['targa'] + ")") == scelta].iloc[0]
+            s = st.selectbox("Seleziona", df['cliente'] + " (" + df['targa'] + ")")
+            c = df[(df['cliente'] + " (" + df['targa'] + ")") == s].iloc[0]
             
-            col_a, col_b, col_c = st.columns(3)
-            
-            # Link diretti ai file nello storage
-            url_pdf = f"{url}/storage/v1/object/public/contratti_media/{c_sel['id']}_contratto.pdf"
-            url_patente = f"{url}/storage/v1/object/public/contratti_media/{c_sel['id']}_patente.jpg"
-            
-            col_a.link_button("📄 PDF Contratto", url_pdf)
-            col_b.link_button("🪪 Foto Patente", url_patente)
-            if col_c.button("🚨 Genera Modulo Vigili"):
-                st.info("Modulo precompilato generato con i dati dell'archivio.")
+            # Link Storage
+            st.link_button("📄 Vedi Contratto", f"{url}/storage/v1/object/public/contratti_media/{c['id']}_contratto.pdf")
+            st.link_button("🪪 Vedi Patente", f"{url}/storage/v1/object/public/contratti_media/{c['id']}_patente.jpg")
 
