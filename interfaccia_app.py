@@ -16,77 +16,123 @@ def clean_t(text):
     for k, v in repls.items(): text = text.replace(k, v)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-# DATI AZIENDA MARIANNA
-INFO_MARIANNA = "BATTAGLIA MARIANNA\nNata a Berlino (Germania) il 13/01/1987\nResidente in Forio alla Via Cognole n. 5\nC.F.: BTTMNN87A53Z112S | P.IVA: 10252601215"
-PRIVACY = "INFORMATIVA PRIVACY: I dati sono trattati ai sensi del Reg. UE 2016/679 (GDPR) per la gestione del noleggio."
-CLAUSOLE = "APPROVAZIONE CLAUSOLE: Ai sensi degli artt. 1341 e 1342 c.c. il Cliente approva: Art. 3 (Multe), Art. 5 (Danni)."
+INFO_AZIENDA = "BATTAGLIA MARIANNA\nVia Cognole n. 5, Forio (NA)\nC.F.: BTTMNN87A53Z112S | P.IVA: 10252601215"
 
-def genera_pdf_contratto(c):
+# --- GENERAZIONE PDF ---
+
+def genera_contratto(c):
     pdf = fpdf.FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", 'B', 10); pdf.multi_cell(0, 5, txt=clean_t(INFO_MARIANNA))
-    pdf.ln(8); pdf.set_font("Arial", 'B', 16); pdf.cell(0, 10, clean_t("CONTRATTO DI NOLEGGIO"), ln=1, align='C')
-    pdf.ln(5); pdf.set_font("Arial", size=11)
-    testo = f"Cliente: {c['cliente']}\nCF: {c.get('cf','')}\nNato a: {c.get('luogo_nascita','')}\nDoc: {c.get('num_doc','')}\n\nVEICOLO: {c['targa']}\nPERIODO: dal {c.get('data_inizio','')} al {c.get('data_fine','')}\nPREZZO: {c.get('prezzo', 0)} Euro"
-    pdf.multi_cell(0, 7, txt=clean_t(testo))
-    pdf.ln(10); pdf.set_font("Arial", 'B', 9); pdf.cell(0, 5, clean_t("PRIVACY E CLAUSOLE"), ln=1)
-    pdf.set_font("Arial", size=8); pdf.multi_cell(0, 4, txt=clean_t(f"{PRIVACY}\n\n{CLAUSOLE}"))
-    pdf.ln(15); pdf.cell(0, 10, clean_t("Firma Cliente: ________________________"), ln=1)
+    pdf.set_font("Arial", 'B', 10); pdf.multi_cell(0, 5, txt=clean_t(INFO_AZIENDA))
+    pdf.ln(10); pdf.set_font("Arial", 'B', 16); pdf.cell(0, 10, clean_t("CONTRATTO DI NOLEGGIO"), ln=1, align='C')
+    pdf.set_font("Arial", size=11)
+    testo = (f"CLIENTE: {c['cliente']}\nC.F.: {c.get('cf','')}\nNATO A: {c.get('luogo_nascita','')}\n"
+             f"RESIDENZA: {c.get('residenza','')}\nPATENTE: {c.get('num_doc','')}\n\n"
+             f"VEICOLO: {c['targa']}\nDAL: {c.get('data_inizio','')} AL: {c.get('data_fine','')}\n"
+             f"PREZZO: {c.get('prezzo', 0)} Euro")
+    pdf.multi_cell(0, 8, txt=clean_t(testo))
+    pdf.ln(10); pdf.set_font("Arial", 'B', 9); pdf.cell(0, 5, "NOTE LEGALI E PRIVACY", ln=1)
+    pdf.set_font("Arial", size=8); pdf.multi_cell(0, 4, txt=clean_t("Il cliente approva le clausole (Art 3, 5, 13) e presta il consenso al trattamento dati (GDPR)."))
     return pdf.output(dest='S').encode('latin-1')
 
-def genera_pdf_multe(c):
+def genera_fattura(c):
     pdf = fpdf.FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", size=10); pdf.multi_cell(0, 5, txt=clean_t(INFO_MARIANNA))
-    pdf.ln(10); pdf.set_font("Arial", 'B', 12); pdf.cell(0, 7, clean_t("DICHIARAZIONE PER VERBALE DI MULTA"), ln=1, align='C')
-    pdf.ln(10); pdf.set_font("Arial", size=11)
-    testo = f"Si dichiara che il veicolo {c['targa']} nel periodo dal {c.get('data_inizio','')} al {c.get('data_fine','')}\nera locato a:\n\nSOGGETTO: {c['cliente']}\nCF: {c.get('cf','')}\nNATO A: {c.get('luogo_nascita','')}\nPATENTE: {c.get('num_doc','')}"
-    pdf.multi_cell(0, 7, txt=clean_t(testo))
+    pdf.set_font("Arial", 'B', 10); pdf.multi_cell(0, 5, txt=clean_t(INFO_AZIENDA))
+    pdf.ln(10); pdf.set_font("Arial", 'B', 16); pdf.cell(0, 10, "FATTURA / RICEVUTA", ln=1, align='C')
+    pdf.set_font("Arial", size=11)
+    testo = f"CLIENTE: {c['cliente']}\nCF/PIVA: {c.get('cf','')}\nIMPORTO: {c.get('prezzo', 0)} Euro\nVEICOLO: {c['targa']}"
+    pdf.multi_cell(0, 8, txt=clean_t(testo))
+    return pdf.output(dest='S').encode('latin-1')
+
+def genera_modulo_vigili(c, data_multa):
+    pdf = fpdf.FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 10); pdf.multi_cell(0, 5, txt=clean_t(INFO_AZIENDA))
+    pdf.ln(10); pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, clean_t("COMUNICAZIONE DATI CONDUCENTE (VIGILI)"), ln=1, align='C')
+    pdf.set_font("Arial", size=11)
+    testo = (f"In relazione all'infrazione del {data_multa}, si comunica che il veicolo {c['targa']}\n"
+             f"era in uso a:\n\nCONDUCENTE: {c['cliente']}\nC.F.: {c.get('cf','')}\n"
+             f"NATO A: {c.get('luogo_nascita','')}\nRESIDENZA: {c.get('residenza','')}\n"
+             f"PATENTE: {c.get('num_doc','')}")
+    pdf.multi_cell(0, 8, txt=clean_t(testo))
     pdf.ln(20); pdf.cell(0, 10, "In fede, Marianna Battaglia", align='R')
     return pdf.output(dest='S').encode('latin-1')
 
-st.sidebar.title("🚀 MasterRent")
-menu = st.sidebar.radio("Menu", ["📝 Nuovo Noleggio", "🗄️ Archivio Documenti"])
+# --- APP STREAMLIT ---
+
+st.sidebar.title("🚀 MasterRent Ischia")
+menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Noleggio", "🗄️ Archivio Documenti"])
 
 if menu == "📝 Nuovo Noleggio":
-    st.header("Nuovo Noleggio")
-    c1, c2 = st.columns(2)
-    cliente = c1.text_input("Nome Cliente")
-    cf = c2.text_input("Codice Fiscale")
-    nascita = c1.text_input("Luogo/Data Nascita")
-    num_doc = c2.text_input("Numero Patente")
-    targa = c1.text_input("TARGA").upper()
-    prezzo = c2.number_input("Prezzo (€)", min_value=0.0)
-    d_ini = c1.date_input("Inizio Noleggio", datetime.date.today())
-    d_fin = c2.date_input("Fine Noleggio", datetime.date.today() + datetime.timedelta(days=1))
-    tel = c1.text_input("Telefono (per WhatsApp)")
-
+    st.header("Registrazione Contratto")
+    col1, col2 = st.columns(2)
+    cliente = col1.text_input("Nome e Cognome")
+    cf = col2.text_input("Codice Fiscale")
+    nascita = col1.text_input("Luogo/Data Nascita")
+    residenza = col2.text_input("Indirizzo Residenza")
+    num_doc = col1.text_input("Numero Patente")
+    tel = col2.text_input("Cellulare")
+    targa = col1.text_input("TARGA").upper()
+    prezzo = col2.number_input("Prezzo (€)", min_value=0.0)
+    d_ini = col1.date_input("Inizio", datetime.date.today())
+    d_fin = col2.date_input("Fine", datetime.date.today() + datetime.timedelta(days=1))
+    
     st.camera_input("📸 Foto Patente")
-    st_canvas(fill_color="white", stroke_width=2, height=150, key="sig_arch")
+    st_canvas(fill_color="white", stroke_width=2, height=150, key="sig_v_new")
 
-    if st.button("💾 SALVA E ARCHIVIA"):
-        if cliente and targa:
-            try:
-                dat = {"cliente": cliente, "cf": cf, "luogo_nascita": nascita, "num_doc": num_doc, "targa": targa, "prezzo": prezzo, "data_inizio": str(d_ini), "data_fine": str(d_fin), "telefono": tel}
-                supabase.table("contratti").insert(dat).execute()
-                st.success("Archiviato! Vai in 'Archivio Documenti' per scaricare i PDF.")
-            except Exception as e: st.error(f"Errore: {e}")
-        else: st.warning("Mancano Nome o Targa!")
+    if st.button("💾 SALVA"):
+        dat = {"cliente": cliente, "cf": cf, "luogo_nascita": nascita, "residenza": residenza, 
+               "num_doc": num_doc, "telefono": tel, "targa": targa, "prezzo": prezzo, 
+               "data_inizio": str(d_ini), "data_fine": str(d_fin)}
+        supabase.table("contratti").insert(dat).execute()
+        st.success("Archiviato!")
 
 elif menu == "🗄️ Archivio Documenti":
-    st.header("🔎 Ricerca Contratti")
-    t_search = st.text_input("INSERISCI TARGA").upper()
-    if t_search:
-        res = supabase.table("contratti").select("*").eq("targa", t_search).execute()
-        if res.data:
-            for c in res.data:
-                with st.expander(f"📂 {c['cliente']} (Periodo: {c.get('data_inizio','')} - {c.get('data_fine','')})"):
-                    p_con = genera_pdf_contratto(c)
-                    p_mul = genera_pdf_multe(c)
-                    col1, col2 = st.columns(2)
-                    col1.download_button("📄 Scarica Contratto", p_con, f"Contratto_{c['targa']}.pdf", key=f"c_{c['id']}")
-                    col2.download_button("🚨 Modulo per Multe", p_mul, f"Multe_{c['targa']}.pdf", key=f"m_{c['id']}")
-                    if c.get('telefono'):
-                        msg = urllib.parse.quote(f"Ciao {c['cliente']}, ecco il tuo contratto.")
-                        st.link_button("📲 Invia su WhatsApp", f"https://wa.me/{c['telefono']}?text={msg}")
-        else: st.warning("Nessun noleggio trovato per questa targa.")
+    st.header("🗄️ Archivio Contratti e Fatture")
+    
+    # --- SEZIONE RICERCA VIGILI ---
+    st.subheader("🚨 Modulo per i Vigili")
+    r1, r2 = st.columns(2)
+    t_vigili = r1.text_input("Targa Infrazione").upper()
+    d_vigili = r2.date_input("Data Infrazione")
+    
+    if t_vigili:
+        # Cerchiamo il noleggio che copre quella data per quella targa
+        res_v = supabase.table("contratti").select("*").eq("targa", t_vigili).lte("data_inizio", str(d_vigili)).gte("data_fine", str(d_vigili)).execute()
+        if res_v.data:
+            c_v = res_v.data[0]
+            pdf_v = genera_modulo_vigili(c_v, d_vigili)
+            st.download_button(f"🚨 SCARICA MODULO VIGILI ({c_v['cliente']})", pdf_v, f"Modulo_Vigili_{t_vigili}.pdf")
+        else:
+            st.info("Nessun noleggio attivo trovato per questa targa in quella data.")
+
+    st.divider()
+
+    # --- TABELLA ARCHIVIO GENERALE ---
+    res = supabase.table("contratti").select("*").order("data_inizio", desc=True).execute()
+    if res.data:
+        # Intestazione Colonne
+        h1, h2, h3, h4 = st.columns([2, 1, 1, 1])
+        h1.write("*Cliente*")
+        h2.write("*Contratto*")
+        h3.write("*Fattura*")
+        h4.write("*Foto*")
+        
+        for c in res.data:
+            c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+            c1.write(f"{c['cliente']}\n({c['targa']})")
+            
+            # Tasto Contratto
+            pdf_c = genera_contratto(c)
+            c2.download_button("📜 PDF", pdf_c, f"Contratto_{c['targa']}.pdf", key=f"c_{c['id']}")
+            
+            # Tasto Fattura
+            pdf_f = genera_fattura(c)
+            c3.download_button("💰 PDF", pdf_f, f"Fattura_{c['id']}.pdf", key=f"f_{c['id']}")
+            
+            # Tasto Foto (Simulato link o visualizzazione)
+            c4.button("📸 Vedi", key=f"p_{c['id']}")
+    else:
+        st.write("L'archivio è vuoto.")
+
