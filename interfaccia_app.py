@@ -19,37 +19,82 @@ def clean_t(text):
     for k, v in repls.items(): text = text.replace(k, v)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-# DATI AZIENDA MARIANNA (Per Modulo Multe)
-TITOLARE_INFO = "BATTAGLIA MARIANNA, nata a Berlino (Germania) il 13/01/1987\nResidente a Forio in Via Cognole n. 5\nC.F.: BTTMNN87A53Z112S | P.IVA: 10252601215"
+# DATI FISSI MARIANNA (Per Intestazione Contratto e Modulo Multe)
+INFO_MARIANNA = "BATTAGLIA MARIANNA\nNata a Berlino (Germania) il 13/01/1987\nResidente in Forio alla Via Cognole n. 5\nC.F.: BTTMNN87A53Z112S | P.IVA: 10252601215"
 
-# TESTI LEGALI
-PRIVACY_TEXT = "INFORMATIVA PRIVACY: I dati personali sono trattati ai sensi del Reg. UE 2016/679 (GDPR). Il cliente presta il consenso."
-CLAUSOLE_VESSATORIE = "Ai sensi degli artt. 1341 e 1342 c.c. il Cliente approva le clausole: 3 (Multe), 4 (Spese), 5 (Danni), 13 (Foro)."
+# TESTI LEGALI COMPLETI
+PRIVACY_TESTO = "INFORMATIVA PRIVACY: I dati personali forniti saranno trattati ai sensi del Regolamento UE 2016/679 (GDPR) esclusivamente per le finalita connesse alla gestione del presente contratto di noleggio e per gli adempimenti di legge. Il cliente dichiara di aver ricevuto l'informativa e presta il consenso al trattamento dei dati."
+CLAUSOLE_TESTO = "APPROVAZIONE CLAUSOLE: Ai sensi degli artt. 1341 e 1342 c.c. il Cliente dichiara di aver letto e di approvare specificamente le seguenti clausole: Art. 3 (Responsabilita per infrazioni e multe), Art. 4 (Spese di gestione verbali), Art. 5 (Penali per danni o furto), Art. 13 (Foro competente)."
 
-def genera_moduli(c):
-    # --- 1. CONTRATTO (PULITO + PRIVACY) ---
-    p1 = fpdf.FPDF()
-    p1.add_page()
-    p1.set_font("Arial", 'B', 16); p1.cell(0, 10, clean_t("CONTRATTO DI NOLEGGIO"), ln=1, align='C')
-    p1.set_font("Arial", size=10)
-    p1.multi_cell(0, 6, txt=clean_t(f"Cliente: {c['cliente']}\nNato a: {c.get('luogo_nascita','')}\nResidenza: {c.get('residenza','')}\nPatente: {c.get('num_doc','')}\n\nVeicolo: {c['targa']} | Data: {c['data_inizio']}"))
-    p1.ln(5); p1.set_font("Arial", size=7); p1.multi_cell(0, 4, txt=clean_t(f"{PRIVACY_TEXT}\n{CLAUSOLE_VESSATORIE}"))
-    b1 = p1.output(dest='S').encode('latin-1')
-
-    # --- 2. MODULO MULTE (VIGILI) ---
-    p2 = fpdf.FPDF()
-    p2.add_page()
-    p2.set_font("Arial", size=10); p2.multi_cell(0, 5, txt=clean_t(TITOLARE_INFO))
-    p2.ln(10); p2.set_font("Arial", 'B', 12); p2.cell(0, 7, clean_t("COMUNICAZIONE LOCAZIONE VEICOLO"), ln=1, align='C')
-    p2.ln(5); p2.set_font("Arial", size=10)
-    p2.multi_cell(0, 6, txt=clean_t(f"Si dichiara che il veicolo {c['targa']} era in uso a:\n\nNome: {c['cliente']}\nCF: {c['cf']}\nNato a: {c.get('luogo_nascita','')}\nResidenza: {c.get('residenza','')}\nDoc: {c.get('num_doc','')}"))
-    p2.ln(10); p2.cell(0, 10, "In fede, Marianna Battaglia", align='R')
-    b2 = p2.output(dest='S').encode('latin-1')
+def genera_pdf_contratto(c):
+    pdf = fpdf.FPDF()
+    pdf.add_page()
     
-    return b1, b2
+    # Intestazione Azienda
+    pdf.set_font("Arial", 'B', 10)
+    pdf.multi_cell(0, 5, txt=clean_t(INFO_MARIANNA))
+    pdf.ln(10)
+    
+    # Titolo
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, clean_t("CONTRATTO DI NOLEGGIO"), ln=1, align='C')
+    pdf.ln(5)
+    
+    # Dati Noleggio
+    pdf.set_font("Arial", size=11)
+    testo_dati = (
+        f"Conducente: {c['cliente']}\n"
+        f"Codice Fiscale: {c.get('cf','')}\n"
+        f"Nato a: {c.get('luogo_nascita','')}\n"
+        f"Residenza: {c.get('residenza','')}\n"
+        f"Patente: {c.get('num_doc','')}\n\n"
+        f"VEICOLO TARGA: {c['targa']}\n"
+        f"DATA INIZIO: {c['data_inizio']}\n"
+        f"PREZZO: {c.get('prezzo', 0)} Euro"
+    )
+    pdf.multi_cell(0, 7, txt=clean_t(testo_dati))
+    pdf.ln(10)
+    
+    # Privacy e Clausole
+    pdf.set_font("Arial", 'B', 9)
+    pdf.cell(0, 5, clean_t("NOTE LEGALI E PRIVACY"), ln=1)
+    pdf.set_font("Arial", size=8)
+    pdf.multi_cell(0, 4, txt=clean_t(f"{PRIVACY_TESTO}\n\n{CLAUSOLE_TESTO}"))
+    
+    # Spazio Firma
+    pdf.ln(15)
+    pdf.set_font("Arial", 'I', 10)
+    pdf.cell(0, 10, clean_t("Firma del Cliente per accettazione: ________________________"), ln=1)
+    
+    return pdf.output(dest='S').encode('latin-1')
+
+def genera_pdf_multe(c):
+    pdf = fpdf.FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=10)
+    pdf.multi_cell(0, 5, txt=clean_t(INFO_MARIANNA))
+    pdf.ln(10)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 7, clean_t("COMUNICAZIONE LOCAZIONE VEICOLO"), ln=1, align='C')
+    pdf.ln(5)
+    pdf.set_font("Arial", size=11)
+    testo_multe = (
+        f"In riferimento al verbale di accertamento infrazione al Codice della Strada,\n"
+        f"la sottoscritta dichiara che il veicolo targato {c['targa']}\n"
+        f"in data {c['data_inizio']} era concesso in locazione al signor:\n\n"
+        f"COGNOME E NOME: {c['cliente']}\n"
+        f"CF: {c['cf']}\n"
+        f"NATO A: {c.get('luogo_nascita','')}\n"
+        f"RESIDENZA: {c.get('residenza','')}\n"
+        f"IDENTIFICATO A MEZZO DOC: {c.get('num_doc','')}"
+    )
+    pdf.multi_cell(0, 7, txt=clean_t(testo_multe))
+    pdf.ln(15)
+    pdf.cell(0, 10, clean_t("In fede, Marianna Battaglia"), align='R')
+    return pdf.output(dest='S').encode('latin-1')
 
 st.sidebar.title("🚀 MasterRent Ischia")
-menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Noleggio", "🗄️ Archivio Documenti"])
+menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Noleggio", "🗄️ Archivio"])
 
 if menu == "📝 Nuovo Noleggio":
     st.header("Nuovo Noleggio")
@@ -62,40 +107,38 @@ if menu == "📝 Nuovo Noleggio":
     telefono = c2.text_input("Cellulare")
     targa = c1.text_input("TARGA").upper()
     prezzo = c2.number_input("Prezzo (€)", min_value=0)
-    
-    # RIMOSSO IL BLOCCO DATI FATTURA DA QUI
 
-    foto_p = st.camera_input("📸 Foto Patente")
-    canvas = st_canvas(fill_color="white", stroke_width=2, height=150, key="sig_v_clean")
+    # BLOCCO FATTURA RIMOSSO DEFINITIVAMENTE
 
-    if st.button("💾 SALVA NOLEGGIO"):
+    st.camera_input("📸 Foto Patente")
+    st.write("✍️ Firma per accettazione clausole e privacy")
+    st_canvas(fill_color="white", stroke_width=2, height=150, key="sig_final_ok")
+
+    if st.button("💾 SALVA E ARCHIVIA"):
         if cliente and targa:
             dat = {"cliente": cliente, "cf": cf_cliente, "targa": targa, "data_inizio": str(datetime.date.today()), "telefono": telefono, "luogo_nascita": nascita, "residenza": residenza, "num_doc": num_doc, "prezzo": prezzo}
             supabase.table("contratti").insert(dat).execute()
-            st.success(f"Noleggio di {cliente} salvato! Vai in Archivio per i documenti.")
+            st.success("Tutto salvato! Vai in Archivio per i documenti.")
         else:
-            st.warning("Compila i campi obbligatori!")
+            st.error("Mancano Nome o Targa!")
 
-elif menu == "🗄️ Archivio Documenti":
-    st.header("🔎 Ricerca per Targa")
+elif menu == "🗄️ Archivio":
+    st.header("🔎 Archivio Contratti")
     t_search = st.text_input("Inserisci TARGA").upper()
-    
     if t_search:
         res = supabase.table("contratti").select("*").eq("targa", t_search).execute()
         if res.data:
             for c in res.data:
-                # Chiave unica per evitare l'errore DuplicateElementId
-                unique_key = f"{c['id']}_{c['targa']}"
-                with st.expander(f"📂 {c['cliente']} - {c['data_inizio']}"):
-                    b1, b2 = genera_moduli(c)
-                    st.write(f"Targa: {c['targa']}")
+                with st.expander(f"📂 {c['cliente']} ({c['data_inizio']})"):
+                    pdf_c = genera_pdf_contratto(c)
+                    pdf_m = genera_pdf_multe(c)
                     
                     col1, col2 = st.columns(2)
-                    col1.download_button("📄 Scarica Contratto", b1, f"Contratto_{c['targa']}.pdf", key=f"dl_c_{unique_key}")
-                    col2.download_button("🚨 Modulo Vigili", b2, f"Multe_{c['targa']}.pdf", key=f"dl_m_{unique_key}")
+                    col1.download_button("📄 Scarica Contratto", pdf_c, f"Contratto_{c['targa']}.pdf", key=f"c_{c['id']}")
+                    col2.download_button("🚨 Modulo Multe", pdf_m, f"Multe_{c['targa']}.pdf", key=f"m_{c['id']}")
                     
                     msg = urllib.parse.quote(f"Ciao {c['cliente']}, ecco il contratto MasterRent.")
-                    st.link_button("📲 Invia su WhatsApp", f"https://wa.me/{c['telefono']}?text={msg}")
+                    st.link_button("📲 Invia WhatsApp", f"https://wa.me/{c['telefono']}?text={msg}")
         else:
-            st.warning("Nessun noleggio trovato per questa targa.")
+            st.warning("Nessun noleggio per questa targa.")
 
