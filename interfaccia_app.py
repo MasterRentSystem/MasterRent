@@ -19,7 +19,7 @@ def clean_t(text):
     for k, v in repls.items(): text = text.replace(k, v)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-# DATI AZIENDA (Per Modulo Multe)
+# DATI AZIENDA MARIANNA
 TITOLARE_INFO = "BATTAGLIA MARIANNA, nata a Berlino (Germania) il 13/01/1987\nResidente a Forio in Via Cognole n. 5\nC.F.: BTTMNN87A53Z112S | P.IVA: 10252601215"
 
 # TESTI LEGALI
@@ -27,7 +27,7 @@ PRIVACY_TEXT = "INFORMATIVA PRIVACY: I dati personali sono trattati ai sensi del
 CLAUSOLE_VESSATORIE = "Ai sensi degli artt. 1341 e 1342 c.c. il Cliente approva le clausole: 3 (Multe), 4 (Spese), 5 (Danni), 13 (Foro)."
 
 def genera_moduli(c):
-    # --- 1. CONTRATTO (PULITO + PRIVACY) ---
+    # --- 1. CONTRATTO (PULITO) ---
     p1 = fpdf.FPDF()
     p1.add_page()
     p1.set_font("Arial", 'B', 16); p1.cell(0, 10, clean_t("CONTRATTO DI NOLEGGIO"), ln=1, align='C')
@@ -42,7 +42,7 @@ def genera_moduli(c):
     p2.set_font("Arial", size=10); p2.multi_cell(0, 5, txt=clean_t(TITOLARE_INFO))
     p2.ln(10); p2.set_font("Arial", 'B', 12); p2.cell(0, 7, clean_t("COMUNICAZIONE LOCAZIONE VEICOLO"), ln=1, align='C')
     p2.ln(5); p2.set_font("Arial", size=10)
-    p2.multi_cell(0, 6, txt=clean_t(f"Si dichiara che il veicolo {c['targa']} era in uso a:\n\nNome: {c['cliente']}\nCF: {c['cf']}\nNato a: {c.get('luogo_nascita','')}\nResidenza: {c.get('residenza','')}\nDoc: {c.get('num_doc','')}"))
+    p2.multi_cell(0, 6, txt=clean_t(f"Si comunica che il veicolo {c['targa']} era in locazione a:\n\nNome: {c['cliente']}\nCF: {c['cf']}\nNato a: {c.get('luogo_nascita','')}\nResidenza: {c.get('residenza','')}\nDoc: {c.get('num_doc','')}"))
     p2.ln(10); p2.cell(0, 10, "In fede, Marianna Battaglia", align='R')
     b2 = p2.output(dest='S').encode('latin-1')
 
@@ -73,15 +73,18 @@ if menu == "📝 Nuovo Noleggio":
     
     with st.expander("💰 Dati Fattura"):
         p_iva = st.text_input("Partita IVA")
-        sdi = st.text_input("SDI / PEC")
+        sdi = st.text_input("Codice SDI / PEC")
 
     foto_p = st.camera_input("📸 Foto Patente")
     canvas = st_canvas(fill_color="white", stroke_width=2, height=150, key="sig_v_final")
 
     if st.button("💾 SALVA TUTTO"):
-        dat = {"cliente": cliente, "cf": cf_cliente, "targa": targa, "data_inizio": str(datetime.date.today()), "telefono": telefono, "p_iva": p_iva, "sdi": sdi, "luogo_nascita": nascita, "residenza": residenza, "num_doc": num_doc, "prezzo": prezzo}
-        supabase.table("contratti").insert(dat).execute()
-        st.success("Archiviato! Vai in Archivio per i PDF.")
+        if cliente and targa:
+            dat = {"cliente": cliente, "cf": cf_cliente, "targa": targa, "data_inizio": str(datetime.date.today()), "telefono": telefono, "p_iva": p_iva, "sdi": sdi, "luogo_nascita": nascita, "residenza": residenza, "num_doc": num_doc, "prezzo": prezzo}
+            supabase.table("contratti").insert(dat).execute()
+            st.success(f"Archiviato con successo! Cerca la targa {targa} in Archivio.")
+        else:
+            st.error("Inserisci almeno Nome e Targa!")
 
 elif menu == "🗄️ Archivio Documenti":
     st.header("🔎 Ricerca per Targa")
@@ -91,18 +94,24 @@ elif menu == "🗄️ Archivio Documenti":
         res = supabase.table("contratti").select("*").eq("targa", t_search).execute()
         if res.data:
             for c in res.data:
-                with st.expander(f"📂 Noleggio: {c['cliente']} ({c['data_inizio']})"):
+                # Creiamo un ID unico per i pulsanti di questo specifico noleggio
+                unique_id = f"{c['id']}_{c['targa']}"
+                
+                with st.expander(f"📂 Noleggio del {c['data_inizio']} - {c['cliente']}"):
                     b1, b2, b3 = genera_moduli(c)
                     
                     st.write(f"*Cliente:* {c['cliente']} | *Targa:* {c['targa']}")
-                    col1, col2, col3 = st.columns(3)
-                    col1.download_button("📄 Contratto", b1, f"Contratto_{c['targa']}.pdf")
-                    col2.download_button("🚨 Modulo Vigili", b2, f"Multe_{c['targa']}.pdf")
-                    col3.download_button("💰 Fattura", b3, f"Fattura_{c['cliente']}.pdf")
                     
-                    if st.button(f"📲 WhatsApp a {c['cliente']}", key=f"wa_{c['id']}"):
-                        msg = urllib.parse.quote(f"Ciao {c['cliente']}, ecco il contratto MasterRent per la targa {c['targa']}.")
-                        st.write(f"https://wa.me/{c['telefono']}?text={msg}")
+                    col1, col2, col3 = st.columns(3)
+                    # Aggiunto 'key' unico per evitare l'errore DuplicateElementId
+                    col1.download_button("📄 Contratto", b1, f"Contratto_{c['targa']}.pdf", key=f"btn_con_{unique_id}")
+                    col2.download_button("🚨 Modulo Vigili", b2, f"Multe_{c['targa']}.pdf", key=f"btn_mul_{unique_id}")
+                    col3.download_button("💰 Fattura", b3, f"Fattura_{c['cliente']}.pdf", key=f"btn_fat_{unique_id}")
+                    
+                    # WhatsApp con link diretto
+                    if c['telefono']:
+                        msg = urllib.parse.quote(f"Ciao {c['cliente']}, ecco i documenti MasterRent per la targa {c['targa']}.")
+                        st.link_button("📲 WhatsApp", f"https://wa.me/{c['telefono']}?text={msg}")
         else:
             st.warning("Nessun noleggio trovato per questa targa.")
 
