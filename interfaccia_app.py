@@ -21,11 +21,20 @@ def clean_t(text):
 
 # DATI AZIENDA
 TITOLARE = "BATTAGLIA MARIANNA"
-PIVA_TITOLARE = "10252601215"
+PIVA = "10252601215"
+SEDE = "Via Cognole n. 5, Forio (NA)"
 
-# TESTI LEGALI LUNGHI
-PRIVACY_TEXT = "INFORMATIVA PRIVACY: I dati personali raccolti saranno trattati ai sensi del Regolamento UE 2016/679 (GDPR). Il trattamento e finalizzato esclusivamente alla gestione del contratto di noleggio e agli obblighi di legge. Il cliente acconsente al trattamento per le finalita indicate."
-CLAUSOLE_VESSATORIE = "Ai sensi degli artt. 1341 e 1342 c.c. il Cliente dichiara di aver letto e approvato specificamente le clausole: 3 (Responsabilita multe), 4 (Spese gestione verbali), 5 (Penali danni/furto), 11 (Smarrimento chiavi), 13 (Foro competente)."
+# TESTI LEGALI
+CONTRATTO_COMPLETO = """
+1.⁠ ⁠CONDIZIONI VEICOLO: Il veicolo viene consegnato in ottimo stato e con il pieno di carburante.
+2.⁠ ⁠RICONSEGNA: Il veicolo deve essere riconsegnato nelle stesse condizioni e con il pieno.
+3.⁠ ⁠MULTE E INFRAZIONI: Il Cliente si assume la piena responsabilita per ogni violazione al CdS (Art. 196 CdS).
+4.⁠ ⁠SPESE GESTIONE: Per ogni verbale notificato, verranno addebitati Euro 25.83 per spese amministrative.
+5.⁠ ⁠DANNI E FURTO: Il Cliente e interamente responsabile per danni al veicolo, furto o incendio.
+6.⁠ ⁠DIVIETI: Vietata la guida sotto effetto di alcool o stupefacenti.
+7.⁠ ⁠AREA DI CIRCOLAZIONE: Il veicolo puo circolare esclusivamente sull'Isola di Ischia.
+8.⁠ ⁠FIRMA E PRIVACY: I dati sono trattati secondo il GDPR 679/2016 per fini contrattuali e legali.
+"""
 
 st.sidebar.title("🚀 MasterRent Ischia")
 aziende_res = supabase.table("aziende").select("*").execute()
@@ -33,87 +42,86 @@ lista_aziende = {a['nome_azienda']: a for a in aziende_res.data} if aziende_res.
 
 if lista_aziende:
     azienda = lista_aziende[st.sidebar.selectbox("Azienda", list(lista_aziende.keys()))]
-    menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Noleggio", "🚨 Archivio"])
+    menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Noleggio", "🚨 Archivio Documenti"])
 
     if menu == "📝 Nuovo Noleggio":
         st.header(f"Contratto: {azienda['nome_azienda']}")
         
-        with st.expander("👤 DATI CLIENTE", expanded=True):
+        with st.expander("👤 ANAGRAFICA CLIENTE", expanded=True):
             c1, c2 = st.columns(2)
             cliente = c1.text_input("NOME E COGNOME")
-            cf_cliente = c2.text_input("CODICE FISCALE")
-            nascita_cliente = c1.text_input("DATA/LUOGO NASCITA")
-            residenza_cliente = c2.text_input("RESIDENZA")
-            num_doc = c1.text_input("NUMERO PATENTE/DOC")
+            cf = c2.text_input("CODICE FISCALE")
+            nascita = c1.text_input("NATO A / IL")
+            residenza = c2.text_input("RESIDENZA")
+            num_doc = c1.text_input("NUMERO PATENTE")
             telefono = c2.text_input("TELEFONO")
 
-        with st.expander("🛵 VEICOLO", expanded=True):
+        with st.expander("🛵 DATI VEICOLO", expanded=True):
             targa = st.text_input("TARGA").upper()
-            prezzo = st.number_input("PREZZO (€)", min_value=0)
+            prezzo = st.number_input("PREZZO TOT (€)", min_value=0)
 
-        foto_p = st.camera_input("📸 FOTO PATENTE")
+        # LETTURA CLAUSOLE PRIMA DI FIRMARE
+        st.warning("⚠️ IL CLIENTE DEVE LEGGERE QUI SOTTO PRIMA DI FIRMARE")
+        with st.expander("🔎 LEGGI TERMINI, CONDIZIONI E PRIVACY"):
+            st.write(CONTRATTO_COMPLETO)
+            st.info("Approvando specificamente le clausole 3, 4, 5 e 13 ai sensi degli artt. 1341-1342 c.c.")
+
+        foto_p = st.camera_input("📸 SCANSIONE DOCUMENTO (Fronte/Retro)")
         
-        st.subheader("✍️ Firma Elettronica")
-        st.write("Firmando qui sotto accetti il contratto, la privacy e le clausole specifiche.")
-        canvas = st_canvas(fill_color="white", stroke_width=2, height=150, key="sig")
+        st.subheader("✍️ FIRMA QUI")
+        canvas = st_canvas(fill_color="white", stroke_width=2, height=150, key="sig_new")
 
-        if st.button("💾 SALVA E GENERA PDF"):
+        if st.button("💾 SALVA E GENERA DOCUMENTAZIONE LEGALE"):
             if cliente and targa and canvas.image_data is not None:
                 try:
-                    oggi = str(datetime.date.today())
-                    dat = {"cliente": cliente, "cf": cf_cliente, "targa": targa, "azienda_id": azienda['id'], "data_inizio": oggi, "telefono": telefono}
+                    # SALVA DB
+                    dat = {"cliente": cliente, "cf": cf, "targa": targa, "azienda_id": azienda['id'], "data_inizio": str(datetime.date.today()), "telefono": telefono}
                     res_db = supabase.table("contratti").insert(dat).execute()
                     id_c = res_db.data[0]['id']
 
-                    # --- PDF CONTRATTO COMPLETO ---
+                    # GENERA PDF UNICO (Contratto + Privacy + Firma)
                     pdf = fpdf.FPDF()
                     pdf.add_page()
-                    
-                    # Intestazione
                     pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, txt=clean_t(azienda['nome_azienda']), ln=1, align='C')
-                    pdf.set_font("Arial", size=8); pdf.cell(0, 5, txt=f"P.IVA {PIVA_TITOLARE}", ln=1, align='C')
+                    pdf.set_font("Arial", size=8); pdf.cell(0, 5, txt=f"P.IVA {PIVA} - {SEDE}", ln=1, align='C')
                     pdf.ln(5)
 
                     # Dati Cliente
-                    pdf.set_font("Arial", 'B', 10); pdf.cell(0, 7, "DATI CONTRATTUALI", ln=1, fill=True)
+                    pdf.set_font("Arial", 'B', 10); pdf.cell(0, 8, "RIEPILOGO CONTRATTO E SOGGETTO", ln=1, fill=True)
                     pdf.set_font("Arial", size=9)
-                    pdf.multi_cell(0, 5, txt=clean_t(f"Cliente: {cliente}\nNato il: {nascita_cliente}\nResidente: {residenza_cliente}\nCF: {cf_cliente}\nDoc: {num_doc}\nVeicolo: {targa}"))
+                    pdf.multi_cell(0, 5, txt=clean_t(f"Conduttore: {cliente}\nNato il: {nascita}\nResidente: {residenza}\nCF: {cf}\nDoc: {num_doc}\nVeicolo: {targa}\nPrezzo: {prezzo} Euro"))
                     pdf.ln(5)
 
-                    # Sezione Privacy
-                    pdf.set_font("Arial", 'B', 9); pdf.cell(0, 5, "INFORMATIVA SULLA PRIVACY", ln=1)
-                    pdf.set_font("Arial", size=7); pdf.multi_cell(0, 4, txt=clean_t(PRIVACY_TEXT))
-                    pdf.ln(3)
-
-                    # Sezione Clausole
-                    pdf.set_font("Arial", 'B', 9); pdf.cell(0, 5, "APPROVAZIONE CLAUSOLE SPECIFICHE", ln=1)
-                    pdf.set_font("Arial", size=7); pdf.multi_cell(0, 4, txt=clean_t(CLAUSOLE_VESSATORIE))
-                    pdf.ln(5)
-
-                    # Firma (Unica firma che viene applicata a tutto il documento)
+                    # Testo Legale
+                    pdf.set_font("Arial", 'B', 9); pdf.cell(0, 5, "CONDIZIONI GENERALI E PRIVACY", ln=1)
+                    pdf.set_font("Arial", size=7); pdf.multi_cell(0, 4, txt=clean_t(CONTRATTO_COMPLETO))
+                    
+                    # Riquadro Firme
                     img_s = Image.fromarray(canvas.image_data.astype('uint8'), 'RGBA')
                     img_s.save("firma.png")
-                    pdf.set_font("Arial", 'I', 8); pdf.cell(0, 5, "Firma del Cliente per accettazione totale:", ln=1)
-                    pdf.image("firma.png", x=10, w=40)
+                    pdf.ln(5); pdf.set_font("Arial", 'B', 8); pdf.cell(0, 5, "FIRMA PER ACCETTAZIONE E CLAUSOLE VESSATORIE (ART. 1341-1342 C.C.)", ln=1)
+                    pdf.image("firma.png", x=10, w=45)
                     
                     bytes_pdf = pdf.output(dest='S').encode('latin-1')
 
                     # STORAGE
-                    supabase.storage.from_("contratti_media").upload(f"contratto_{id_c}.pdf", bytes_pdf, {"content-type": "application/pdf"})
+                    supabase.storage.from_("contratti_media").upload(f"doc_{id_c}.pdf", bytes_pdf, {"content-type": "application/pdf"})
                     if foto_p:
                         supabase.storage.from_("contratti_media").upload(f"pat_{id_c}.jpg", foto_p.getvalue(), {"content-type": "image/jpeg"})
 
-                    st.success("✅ Documento creato!")
-                    st.download_button("📥 Scarica Contratto Firmato", bytes_pdf, file_name=f"Contratto_{targa}.pdf")
+                    st.success("✅ Contratto firmato e archiviato!")
+                    st.download_button("📥 Scarica PDF per Cliente", bytes_pdf, file_name=f"Contratto_{targa}.pdf")
 
                 except Exception as e:
                     st.error(f"Errore: {e}")
 
-    elif menu == "🚨 Archivio":
+    elif menu == "🚨 Archivio Documenti":
         st.header("🗄️ Archivio")
         res = supabase.table("contratti").select("*").eq("azienda_id", azienda['id']).execute()
         if res.data:
             df = pd.DataFrame(res.data).sort_values(by='created_at', ascending=False)
-            sel = st.selectbox("Seleziona", df['cliente'] + " - " + df['targa'])
+            sel = st.selectbox("Cerca Cliente/Targa", df['cliente'] + " - " + df['targa'])
             c = df[(df['cliente'] + " - " + df['targa']) == sel].iloc[0]
-            st.link_button("📄 Vedi Contratto e Privacy", f"{url}/storage/v1/object/public/contratti_media/contratto_{c['id']}.pdf")
+            st.link_button("📄 Vedi Contratto Firmato", f"{url}/storage/v1/object/public/contratti_media/doc_{c['id']}.pdf")
+            st.link_button("🪪 Vedi Foto Patente", f"{url}/storage/v1/object/public/contratti_media/pat_{c['id']}.jpg")
+
