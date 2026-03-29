@@ -19,7 +19,7 @@ def clean_t(text):
     for k, v in repls.items(): text = text.replace(k, v)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-# DATI FISSI MARIANNA (Per Modulo Multe)
+# DATI AZIENDA MARIANNA (Per Modulo Multe)
 TITOLARE_INFO = "BATTAGLIA MARIANNA, nata a Berlino (Germania) il 13/01/1987\nResidente a Forio in Via Cognole n. 5\nC.F.: BTTMNN87A53Z112S | P.IVA: 10252601215"
 
 st.sidebar.title("🚀 MasterRent Ischia")
@@ -28,13 +28,13 @@ lista_aziende = {a['nome_azienda']: a for a in aziende_res.data} if aziende_res.
 
 if lista_aziende:
     azienda = lista_aziende[st.sidebar.selectbox("Azienda", list(lista_aziende.keys()))]
-    menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Noleggio", "🚨 Archivio"])
+    menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Noleggio", "🗄️ Archivio (Cerca Targa)"])
 
     if menu == "📝 Nuovo Noleggio":
         st.header(f"Nuovo Contratto: {azienda['nome_azienda']}")
         
-        # --- SEZIONE 1: ANAGRAFICA (Per Contratto e Multe) ---
-        st.subheader("👤 Dati Conducente")
+        # INPUT DATI
+        st.subheader("👤 Dati Cliente")
         c1, c2 = st.columns(2)
         cliente = c1.text_input("Nome e Cognome")
         cf_cliente = c2.text_input("Codice Fiscale")
@@ -43,81 +43,64 @@ if lista_aziende:
         num_doc = c1.text_input("Num. Patente")
         telefono = c2.text_input("Cellulare (WhatsApp)")
 
-        # --- SEZIONE 2: VEICOLO ---
-        st.subheader("🛵 Dati Veicolo")
+        st.subheader("🛵 Dati Veicolo e Fattura")
         c3, c4 = st.columns(2)
-        targa = c3.text_input("Targa").upper()
-        prezzo = c4.number_input("Prezzo Totale (€)", min_value=0)
-
-        # --- SEZIONE 3: FATTURAZIONE (Separata) ---
-        with st.expander("💰 Dati per Fattura Elettronica (Opzionale)"):
-            p_iva = st.text_input("Partita IVA")
-            sdi = st.text_input("Codice Univoco / PEC")
+        targa = c3.text_input("TARGA").upper()
+        prezzo = c4.number_input("Prezzo (€)", min_value=0)
+        p_iva = c3.text_input("P.IVA (se richiesta)")
+        sdi = c4.text_input("SDI / PEC")
 
         foto_p = st.camera_input("📸 Foto Patente")
         st.subheader("✍️ Firma")
-        canvas = st_canvas(fill_color="white", stroke_width=2, height=150, key="sig_v4")
+        canvas = st_canvas(fill_color="white", stroke_width=2, height=150, key="sig_v5")
 
-        if st.button("💾 SALVA TUTTI I MODULI"):
+        if st.button("💾 SALVA TUTTO"):
             if cliente and targa and canvas.image_data is not None:
                 try:
-                    oggi = str(datetime.date.today())
-                    id_c = str(datetime.datetime.now().timestamp()).replace(".","")
-                    img_s = Image.fromarray(canvas.image_data.astype('uint8'), 'RGBA'); img_s.save("f.png")
-
-                    # --- PDF 1: CONTRATTO (Pulito) ---
-                    p1 = fpdf.FPDF()
-                    p1.add_page()
-                    p1.set_font("Arial", 'B', 16); p1.cell(0, 10, clean_t(azienda['nome_azienda']), ln=1, align='C')
-                    p1.set_font("Arial", size=10)
-                    p1.multi_cell(0, 6, txt=clean_t(f"CONTRATTO DI NOLEGGIO\n\nCliente: {cliente}\nNato a: {nascita}\nResidente: {residenza}\nPatente: {num_doc}\nVeicolo: {targa}\nData: {oggi}\n\nIl cliente accetta le condizioni e la privacy GDPR."))
-                    p1.ln(5); p1.image("f.png", x=10, w=40)
-                    b1 = p1.output(dest='S').encode('latin-1')
-
-                    # --- PDF 2: MODULO MULTE (Fidelo al tuo cartaceo) ---
-                    p2 = fpdf.FPDF()
-                    p2.add_page()
-                    p2.set_font("Arial", size=10); p2.multi_cell(0, 5, txt=clean_t(TITOLARE_INFO))
-                    p2.ln(10); p2.set_font("Arial", 'B', 12); p2.cell(0, 7, "COMUNICAZIONE LOCAZIONE VEICOLO", ln=1, align='C')
-                    p2.ln(5); p2.set_font("Arial", size=10)
-                    p2.multi_cell(0, 6, txt=clean_t(f"Si dichiara che il veicolo {targa} era in uso a:\n\nNome: {cliente}\nCF: {cf_cliente}\nNato a: {nascita}\nResidenza: {residenza}\nDoc: {num_doc}"))
-                    p2.ln(10); p2.cell(0, 10, "In fede, Marianna Battaglia", align='R')
-                    b2 = p2.output(dest='S').encode('latin-1')
-
-                    # --- PDF 3: MODULO FATTURA (Solo se richiesto) ---
-                    p3 = fpdf.FPDF()
-                    p3.add_page()
-                    p3.set_font("Arial", 'B', 14); p3.cell(0, 10, "RIEPILOGO FATTURAZIONE", ln=1, align='C')
-                    p3.set_font("Arial", size=11); p3.multi_cell(0, 8, txt=clean_t(f"Cliente: {cliente}\nPartita IVA: {p_iva}\nCodice Univoco/PEC: {sdi}\nImporto: {prezzo} Euro\nVeicolo: {targa}"))
-                    b3 = p3.output(dest='S').encode('latin-1')
-
-                    # STORAGE
-                    supabase.storage.from_("contratti_media").upload(f"con_{id_c}.pdf", b1)
-                    supabase.storage.from_("contratti_media").upload(f"mul_{id_c}.pdf", b2)
-                    supabase.storage.from_("contratti_media").upload(f"fat_{id_c}.pdf", b3)
-                    if foto_p:
-                        supabase.storage.from_("contratti_media").upload(f"pat_{id_c}.jpg", foto_p.getvalue())
-
-                    st.success("✅ Moduli generati correttamente!")
-                    
-                    # TASTI AZIONE
-                    wa_msg = urllib.parse.quote(f"Ciao {cliente}, ecco il tuo contratto MasterRent ({targa}).")
-                    st.markdown(f'''<a href="https://wa.me/{telefono}?text={wa_msg}" target="_blank"><button style="background-color:#25D366;color:white;width:100%;border:none;padding:12px;border-radius:10px;font-weight:bold;cursor:pointer;">📲 Invia Contratto su WhatsApp</button></a>''', unsafe_allow_html=True)
-                    
-                    c1, c2, c3 = st.columns(3)
-                    c1.download_button("📥 Contratto", b1, f"Contratto_{targa}.pdf")
-                    c2.download_button("🚨 Modulo Multe", b2, f"Multe_{targa}.pdf")
-                    c3.download_button("💰 Dati Fattura", b3, f"Fattura_{targa}.pdf")
-
+                    # SALVATAGGIO DB (Includiamo P.IVA e SDI)
+                    dat = {
+                        "cliente": cliente, "cf": cf_cliente, "targa": targa, 
+                        "azienda_id": azienda['id'], "data_inizio": str(datetime.date.today()), 
+                        "telefono": telefono, "p_iva": p_iva, "sdi": sdi,
+                        "luogo_nascita": nascita, "residenza": residenza, "num_doc": num_doc
+                    }
+                    res_db = supabase.table("contratti").insert(dat).execute()
+                    st.success(f"Noleggio {targa} salvato correttamente!")
                 except Exception as e:
                     st.error(f"Errore: {e}")
 
-    elif menu == "🚨 Archivio":
-        st.header("🗄️ Archivio")
-        res = supabase.table("contratti").select("*").execute()
-        if res.data:
-            df = pd.DataFrame(res.data).sort_values(by='created_at', ascending=False)
-            sel = st.selectbox("Seleziona", df['cliente'] + " - " + df['targa'])
-            c = df[(df['cliente'] + " - " + df['targa']) == sel].iloc[0]
-            st.info("Documenti salvati nello storage con prefissi con_, mul_, fat_, pat_")
+    elif menu == "🗄️ Archivio (Cerca Targa)":
+        st.header("🔎 Ricerca Documentazione")
+        targa_search = st.text_input("Inserisci TARGA per generare i moduli", "").upper()
+        
+        if targa_search:
+            res = supabase.table("contratti").select("*").eq("targa", targa_search).execute()
+            if res.data:
+                for c in res.data:
+                    with st.expander(f"Noleggio del {c['data_inizio']} - {c['cliente']}"):
+                        st.write(f"*Dati:* {c['cliente']} | CF: {c['cf']}")
+                        
+                        # GENERAZIONE PDF AL VOLO (I 3 MODULI SEPARATI)
+                        # 1. MODULO MULTE (Precompilato)
+                        p_mul = fpdf.FPDF()
+                        p_mul.add_page()
+                        p_mul.set_font("Arial", size=10); p_mul.multi_cell(0, 5, txt=clean_t(TITOLARE_INFO))
+                        p_mul.ln(10); p_mul.set_font("Arial", 'B', 12); p_mul.cell(0, 7, "COMUNICAZIONE LOCAZIONE VEICOLO", ln=1, align='C')
+                        p_mul.ln(5); p_mul.set_font("Arial", size=10)
+                        p_mul.multi_cell(0, 6, txt=clean_t(f"Si comunica che il veicolo {c['targa']} era in locazione a:\n\nNome: {c['cliente']}\nCF: {c['cf']}\nNato a: {c.get('luogo_nascita', '---')}\nResidenza: {c.get('residenza', '---')}\nDoc: {c.get('num_doc', '---')}"))
+                        p_mul.ln(10); p_mul.cell(0, 10, "In fede, Marianna Battaglia", align='R')
+                        b_mul = p_mul.output(dest='S').encode('latin-1')
+
+                        # 2. MODULO FATTURA
+                        p_fat = fpdf.FPDF()
+                        p_fat.add_page()
+                        p_fat.set_font("Arial", 'B', 14); p_fat.cell(0, 10, "DATI PER FATTURAZIONE", ln=1, align='C')
+                        p_fat.set_font("Arial", size=11); p_fat.multi_cell(0, 8, txt=clean_t(f"Cliente: {c['cliente']}\nP.IVA: {c.get('p_iva', '---')}\nSDI: {c.get('sdi', '---')}\nTarga: {c['targa']}\nData: {c['data_inizio']}"))
+                        b_fat = p_fat.output(dest='S').encode('latin-1')
+
+                        col1, col2 = st.columns(2)
+                        col1.download_button("🚨 Scarica Modulo Multe", b_mul, f"Multe_{c['targa']}_{c['data_inizio']}.pdf")
+                        col2.download_button("💰 Scarica Dati Fattura", b_fat, f"Fattura_{c['cliente']}.pdf")
+            else:
+                st.warning("Nessun noleggio trovato per questa targa.")
 
