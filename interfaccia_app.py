@@ -12,7 +12,6 @@ key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 BUCKET_NAME = "DOCUMENTI_PATENTI"
 
-# INTESTAZIONE PROFESSIONALE
 DITTA_NOME = "BATTAGLIA MARIANNA"
 DITTA_INFO = "Via Cognole, 5 - 80075 Forio (NA)\nP. IVA 10252601215 | C.F. BTTMNN87A53Z112S"
 
@@ -22,112 +21,110 @@ def clean_t(text):
     for k, v in repls.items(): text = str(text).replace(k, v)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-def add_header(pdf):
-    pdf.set_font("Arial", 'B', 16)
+def add_header_custom(pdf, titolo):
+    pdf.set_font("Arial", 'B', 18)
     pdf.cell(0, 10, clean_t(DITTA_NOME), ln=1, align='L')
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 5, clean_t(DITTA_INFO), align='L')
     pdf.line(10, 35, 200, 35)
-    pdf.ln(12)
+    pdf.ln(10)
+    pdf.set_font("Arial", 'B', 15)
+    pdf.cell(0, 10, clean_t(titolo), ln=1, align='C')
+    pdf.ln(5)
 
-# --- FUNZIONE CONTRATTO (Con Clausole) ---
-def crea_pdf_contratto(c):
+# --- 📜 FUNZIONE CONTRATTO ---
+def crea_pdf_contratto_v21(c):
     pdf = fpdf.FPDF()
     pdf.add_page()
-    add_header(pdf)
-    pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, "CONTRATTO DI NOLEGGIO", ln=1, align='C'); pdf.ln(5)
+    add_header_custom(pdf, "CONTRATTO DI NOLEGGIO")
     pdf.set_font("Arial", size=10)
-    pdf.multi_cell(0, 7, clean_t(f"CLIENTE: {c['cliente']}\nC.F.: {c['cf']}\nRESIDENZA: {c['residenza']}\nVEICOLO: {c['targa']}\nPERIODO: {c['data_inizio']} ({c['ora_inizio']}) - {c['data_fine']} ({c['ora_fine']})"), border=1)
-    pdf.ln(5); pdf.set_font("Arial", 'B', 8); pdf.cell(0, 5, "CONDIZIONI GENERALI (ART. 1-14)", ln=1)
+    testo_box = f"CLIENTE: {c['cliente']}\nC.F.: {c['cf']}\nMEZZO: {c['targa']}\nPERIODO: dal {c['data_inizio']} al {c['data_fine']}"
+    pdf.multi_cell(0, 7, clean_t(testo_box), border=1)
+    pdf.ln(5)
+    pdf.set_font("Arial", 'B', 8); pdf.cell(0, 5, "CONDIZIONI (1-14):", ln=1)
     pdf.set_font("Arial", size=7)
-    pdf.multi_cell(0, 4, clean_t("1. Veicolo in ottimo stato. 2. Responsabilita danni/furto totale. 3. Sanzioni C.d.S. a carico cliente + 25.83 Euro gestione. 4. Obbligo casco e fermo amm.vo. 5. Foro competente Ischia. 6. Privacy GDPR."), border='T')
-    pdf.ln(20); pdf.cell(0, 10, "Firma Cliente: ______________________", align='R')
+    pdf.multi_cell(0, 4, clean_t("Responsabilita totale danni e furto a carico del cliente. Multe + 25.83 euro. Foro Ischia. Casco obbligatorio. Privacy GDPR."), border='T')
+    pdf.ln(20); pdf.cell(0, 10, "Firma: ______________________", align='R')
     return pdf.output(dest='S').encode('latin-1')
 
-# --- FUNZIONE RICEVUTA (Solo Pagamento) ---
-def crea_pdf_ricevuta(c):
+# --- 💰 FUNZIONE RICEVUTA ---
+def crea_pdf_ricevuta_v21(c):
     pdf = fpdf.FPDF()
     pdf.add_page()
-    add_header(pdf)
-    pdf.set_font("Arial", 'B', 16); pdf.cell(0, 10, "RICEVUTA DI PAGAMENTO", ln=1, align='C'); pdf.ln(15)
+    add_header_custom(pdf, "RICEVUTA DI PAGAMENTO")
     pdf.set_font("Arial", size=12)
+    pdf.ln(10)
     pdf.cell(0, 10, clean_t(f"Ricevuti da: {c['cliente']}"), ln=1)
-    pdf.cell(0, 10, clean_t(f"Targa veicolo: {c['targa']}"), ln=1)
-    pdf.ln(20); pdf.set_font("Arial", 'B', 20)
-    pdf.cell(0, 20, clean_t(f"TOTALE CORRISPOSTO: Euro {c['prezzo']}"), border=1, ln=1, align='C', center=True)
+    pdf.cell(0, 10, clean_t(f"Per noleggio veicolo targa: {c['targa']}"), ln=1)
+    pdf.ln(15)
+    pdf.set_font("Arial", 'B', 20)
+    pdf.cell(0, 20, clean_t(f"TOTALE: Euro {c['prezzo']}"), border=1, ln=1, align='C')
     return pdf.output(dest='S').encode('latin-1')
 
-# --- FUNZIONE VIGILI (Dichiarazione Legale) ---
-def crea_pdf_vigili(c):
+# --- 🚨 FUNZIONE VIGILI ---
+def crea_pdf_vigili_v21(c):
     pdf = fpdf.FPDF()
     pdf.add_page()
-    add_header(pdf)
-    pdf.set_font("Arial", 'B', 12); pdf.cell(0, 10, "DICHIARAZIONE SOSTITUTIVA (L. 445/2000)", ln=1, align='C'); pdf.ln(10)
+    add_header_custom(pdf, "DICHIARAZIONE DATI CONDUCENTE")
     pdf.set_font("Arial", size=11)
     testo = (
-        f"La sottoscritta BATTAGLIA MARIANNA, titolare di MasterRent, dichiara che il veicolo targa {c['targa']}\n"
-        f"in data {c['data_inizio']} era affidato per noleggio al Sig.:\n\n"
-        f"NOME: {c['cliente']}\nNATO A: {c.get('luogo_nascita', '---')}\n"
-        f"RESIDENTE: {c['residenza']}\nC.F.: {c['cf']}\nPATENTE: {c['num_doc']}\n\n"
-        f"Si richiede la rinotifica dei verbali al suddetto locatario."
+        f"La sottoscritta BATTAGLIA MARIANNA dichiara che il veicolo targa {c['targa']}\n"
+        f"in data {c['data_inizio']} era affidato al Sig.:\n\n"
+        f"NOME: {c['cliente']}\nC.F.: {c['cf']}\nRESIDENTE: {c['residenza']}\nPATENTE: {c['num_doc']}\n\n"
+        f"Si richiede la rinotifica al conducente sopra indicato ai sensi della L. 445/2000."
     )
     pdf.multi_cell(0, 8, clean_t(testo))
-    pdf.ln(20); pdf.cell(0, 10, "Timbro e Firma: ______________________", align='R')
+    pdf.ln(20); pdf.cell(0, 10, "Firma e Timbro: ______________________", align='R')
     return pdf.output(dest='S').encode('latin-1')
 
-# --- INTERFACCIA APP ---
+# --- INTERFACCIA ---
 st.set_page_config(page_title="MasterRent Ischia", layout="wide")
-menu = st.sidebar.radio("Scegli Operazione", ["📝 Nuovo Noleggio", "🗄️ Archivio", "🚨 Modulo Vigili"])
+scelta = st.sidebar.radio("Scegli", ["Nuovo", "Archivio", "Multe"])
 
-if menu == "📝 Nuovo Noleggio":
-    with st.form("form_v20"):
-        col1, col2 = st.columns(2)
-        nome = col1.text_input("Cognome Nome")
-        cf = col2.text_input("C.F.")
-        nascita = col1.text_input("Luogo/Data Nascita")
-        residenza = col2.text_input("Indirizzo Residenza")
-        patente = col1.text_input("Numero Patente")
-        targa = col2.text_input("TARGA").upper()
-        tel = col1.text_input("Telefono")
-        prezzo = col2.number_input("Prezzo Totale (€)", min_value=0.0)
+if scelta == "Nuovo":
+    with st.form("main_v21"):
+        c1, c2 = st.columns(2)
+        nome = c1.text_input("Nome Cliente")
+        targa = c2.text_input("Targa").upper()
+        cf = c1.text_input("C.F.")
+        res = c2.text_input("Residenza")
+        pat = c1.text_input("Patente")
+        tel = c2.text_input("Telefono")
+        prezzo = c1.number_input("Prezzo (€)", min_value=0.0)
         
-        d1, d2, d3, d4 = st.columns(4)
-        di = d1.date_input("Data Inizio")
-        oi = d2.text_input("Ora Inizio", "10:00")
-        df = d3.date_input("Data Fine")
-        of = d4.text_input("Ora Fine", "10:00")
+        d1, d2 = st.columns(2)
+        di = d1.date_input("Inizio", datetime.date.today())
+        df = d2.date_input("Fine", datetime.date.today() + datetime.timedelta(days=1))
         
-        st.info("Informativa: Il cliente accetta la responsabilita per danni, furto e sanzioni (Art. 1341-1342 c.c.)")
-        accetto = st.checkbox("ACCETTO LE CONDIZIONI E LA PRIVACY")
+        accetto = st.checkbox("Accetto Privacy e Clausole 1-14")
+        foto = st.camera_input("Foto Patente")
+        st_canvas(height=100, key="sign_v21")
         
-        foto = st.camera_input("📸 SCATTA FOTO PATENTE")
-        st_canvas(height=150, key="sign_v20")
-        
-        if st.form_submit_button("💾 SALVA NOLEGGIO"):
+        if st.form_submit_button("SALVA"):
             if accetto:
                 fn = f"{targa}_{int(time.time())}.jpg"
                 if foto: supabase.storage.from_(BUCKET_NAME).upload(fn, foto.getvalue())
-                dat = {"cliente": nome, "cf": cf, "luogo_nascita": nascita, "residenza": residenza, "num_doc": patente, "targa": targa, "prezzo": prezzo, "data_inizio": str(di), "ora_inizio": oi, "data_fine": str(df), "ora_fine": of, "telefono": tel, "foto_path": fn if foto else None}
+                dat = {"cliente": nome, "targa": targa, "cf": cf, "residenza": res, "num_doc": pat, "telefono": tel, "prezzo": prezzo, "data_inizio": str(di), "data_fine": str(df), "foto_path": fn if foto else None}
                 supabase.table("contratti").insert(dat).execute()
-                st.success("Dati salvati in Archivio!")
-            else: st.error("Devi spuntare la casella di accettazione!")
+                st.success("Salvato correttamente!")
+            else: st.error("Accetta i termini!")
 
-elif menu == "🗄️ Archivio":
+elif scelta == "Archivio":
     res = supabase.table("contratti").select("*").order("id", desc=True).execute()
     for c in res.data:
         with st.expander(f"📄 {c['cliente']} - {c['targa']}"):
             col1, col2, col3, col4 = st.columns(4)
-            col1.download_button("📜 CONTRATTO", crea_pdf_contratto(c), f"Contratto_{c['id']}.pdf")
-            col2.download_button("💰 RICEVUTA", crea_pdf_ricevuta(c), f"Ricevuta_{c['id']}.pdf")
+            col1.download_button("📜 CONTRATTO", crea_pdf_contratto_v21(c), f"Contr_{c['id']}.pdf")
+            col2.download_button("💰 RICEVUTA", crea_pdf_ricevuta_v21(c), f"Ricev_{c['id']}.pdf")
             if c.get("foto_path"):
-                url_f = supabase.storage.from_(BUCKET_NAME).get_public_url(c["foto_path"])
-                col3.link_button("📸 VEDI PATENTE", url_f)
-            t_wa = str(c.get('telefono','')).replace(" ","")
-            if t_wa: col4.link_button("💬 WHATSAPP", f"https://wa.me/39{t_wa}")
+                url = supabase.storage.from_(BUCKET_NAME).get_public_url(c["foto_path"])
+                col3.link_button("📸 PATENTE", url)
+            if c.get("telefono"):
+                col4.link_button("💬 WA", f"https://wa.me/39{c['telefono']}")
 
-elif menu == "🚨 Modulo Vigili":
+elif scelta == "Multe":
     t_m = st.text_input("Inserisci Targa").upper()
     if t_m:
         res_m = supabase.table("contratti").select("*").eq("targa", t_m).execute()
         if res_m.data:
-            st.download_button("🚨 SCARICA DICHIARAZIONE VIGILI", crea_pdf_vigili(res_m.data[0]), f"Vigili_{t_m}.pdf")
+            st.download_button("🚨 MODULO VIGILI", crea_pdf_vigili_v21(res_m.data[0]), f"Vigili_{t_m}.pdf")
