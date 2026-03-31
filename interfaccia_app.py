@@ -35,98 +35,90 @@ def genera_pdf_completo(c, tipo="CONTRATTO"):
     pdf.ln(5)
     
     # Dati Cliente e Veicolo
-    pdf.set_font("Arial", 'B', 9); pdf.cell(0, 6, "DATI CONDUCENTE E VEICOLO", ln=1)
+    pdf.set_font("Arial", 'B', 9); pdf.cell(0, 6, "DATI NOLEGGIO", ln=1)
     pdf.set_font("Arial", size=9)
     pdf.cell(95, 7, clean_t(f"CLIENTE: {c.get('cliente')}"), border=1)
     pdf.cell(95, 7, clean_t(f"C.F.: {c.get('cf')}"), border=1, ln=1)
-    pdf.cell(95, 7, clean_t(f"PATENTE: {c.get('num_doc')}"), border=1)
-    pdf.cell(95, 7, clean_t(f"SCADENZA: {c.get('scadenza_patente')}"), border=1, ln=1)
+    pdf.cell(190, 7, clean_t(f"RESIDENZA: {c.get('residenza')}"), border=1, ln=1)
     pdf.cell(60, 7, clean_t(f"TARGA: {c.get('targa')}"), border=1)
     pdf.cell(65, 7, clean_t(f"DAL: {c.get('data_inizio')}"), border=1)
-    pdf.cell(65, 7, clean_t(f"AL: {c.get('data_fine', '---')}"), border=1, ln=1)
+    pdf.cell(65, 7, clean_t(f"AL: {c.get('data_fine')}"), border=1, ln=1)
     
     if tipo == "CONTRATTO":
-        pdf.ln(5); pdf.set_font("Arial", 'B', 8); pdf.cell(0, 5, "CONDIZIONI GENERALI DI NOLEGGIO (ARTT. 1341-1342 C.C.)", ln=1)
+        pdf.ln(5); pdf.set_font("Arial", 'B', 8); pdf.cell(0, 5, "CONDIZIONI GENERALI (ARTT. 1341-1342 C.C.)", ln=1)
         pdf.set_font("Arial", size=7)
         clausole = (
             "1. Il cliente dichiara di aver ricevuto il veicolo in ottimo stato.\n"
             "2. RESPONSABILITA: Il conducente e responsabile per danni, furto e contravvenzioni.\n"
-            "3. DIVIETI: Vietata la guida a terzi non autorizzati.\n"
-            "4. PRIVACY: Si autorizza il trattamento dati e la foto della patente ai sensi del GDPR.\n"
-            "5. Clausola vessatoria: Il cliente accetta specificamente gli artt. 1341 e 1342 c.c."
+            "3. PRIVACY: Si autorizza il trattamento dati e la foto della patente (GDPR).\n"
+            "4. Clausola vessatoria: Il cliente accetta specificamente gli artt. 1341 e 1342 c.c."
         )
         pdf.multi_cell(0, 4, txt=clean_t(clausole), border='T')
         pdf.ln(10); pdf.set_font("Arial", 'B', 10); pdf.cell(0, 10, "Firma del Cliente: ______________________", align='R')
     
-    elif tipo == "VIGILI":
-        pdf.ln(10); pdf.set_font("Arial", size=11)
-        testo_v = "Si dichiara che nella data indicata il veicolo era affidato al soggetto sopra identificato."
-        pdf.multi_cell(0, 7, txt=clean_t(testo_v))
-
     return pdf.output(dest='S').encode('latin-1')
 
 # --- APP STREAMLIT ---
 st.set_page_config(page_title="MasterRent - Gestione", layout="centered")
 st.title("🛵 MasterRent Ischia")
-st.caption(INTESTAZIONE_TXT.split("\n")[0])
 
 menu = st.sidebar.radio("Navigazione", ["📝 Nuovo Noleggio", "🗄️ Archivio", "🚨 Gestione Multe"])
 
 if menu == "📝 Nuovo Noleggio":
-    with st.form("checkin_form"):
-        st.subheader("Registrazione Cliente")
+    with st.form("checkin_form_v12"):
+        st.subheader("Registrazione Cliente e Date")
         c1, c2 = st.columns(2)
         nome = c1.text_input("Nome e Cognome")
         cf = c2.text_input("Codice Fiscale")
-        nascita = c1.text_input("Luogo e Data Nascita")
-        residenza = c2.text_input("Residenza")
-        num_doc = c1.text_input("Numero Patente")
-        scadenza = c2.date_input("Scadenza Patente")
         targa = c1.text_input("TARGA").upper()
         prezzo = c2.number_input("Prezzo Totale (€)", min_value=0.0)
-        telefono = st.text_input("Cellulare Cliente (per WhatsApp)", help="Es: 393331234567")
         
-        # Area Informativa Privacy
-        st.info("*INFORMATIVA PRIVACY & CONDIZIONI LEGALI*\n\nIl cliente noleggiatore dichiara di essere maggiorenne e responsabile del veicolo. Ai sensi degli artt. 1341-1342 c.c. accetta la responsabilità per danni, furto e sanzioni amministrative. Autorizza la conservazione della foto patente per obblighi di legge.")
+        # --- CAMPI DATE AGGIUNTI ---
+        d_inizio = c1.date_input("Inizio Noleggio", datetime.date.today())
+        d_fine = c2.date_input("Fine Noleggio", datetime.date.today() + datetime.timedelta(days=1))
+        
+        residenza = st.text_input("Indirizzo Residenza")
+        num_doc = c1.text_input("Numero Patente")
+        scadenza_p = c2.date_input("Scadenza Patente")
+        
+        st.info("*PRIVACY:* Il cliente accetta la responsabilità per danni/multe e autorizza la foto patente (artt. 1341-1342 c.c.).")
         
         foto = st.camera_input("📸 Foto Patente")
-        st.write("✍️ *Firma Digitale*")
-        st_canvas(fill_color="white", stroke_width=2, height=150, key="canvas_v11")
+        st_canvas(fill_color="white", stroke_width=2, height=150, key="canvas_v12")
         
-        if st.form_submit_button("💾 SALVA E GENERA"):
+        if st.form_submit_button("💾 SALVA NOLEGGIO"):
             fn = f"{targa}_{int(time.time())}.jpg"
             if foto: supabase.storage.from_(BUCKET_NAME).upload(fn, foto.getvalue())
             
-            dat = {"cliente": nome, "cf": cf, "luogo_nascita": nascita, "residenza": residenza, 
-                   "num_doc": num_doc, "scadenza_patente": str(scadenza), "targa": targa, 
-                   "prezzo": prezzo, "data_inizio": str(datetime.date.today()), "foto_path": fn if foto else None}
+            dat = {
+                "cliente": nome, "cf": cf, "residenza": residenza, "num_doc": num_doc, 
+                "scadenza_patente": str(scadenza_p), "targa": targa, "prezzo": prezzo, 
+                "data_inizio": str(d_inizio), "data_fine": str(d_fine), 
+                "foto_path": fn if foto else None
+            }
             supabase.table("contratti").insert(dat).execute()
-            st.success("Noleggio Archiviato!")
+            st.success(f"Noleggio registrato dal {d_inizio} al {d_fine}!")
 
 elif menu == "🗄️ Archivio":
-    st.header("🗄️ Archivio Contratti")
+    st.header("🗄️ Archivio")
     res = supabase.table("contratti").select("*").order("id", desc=True).execute()
     for c in res.data:
-        with st.expander(f"📄 {c['cliente']} - {c['targa']}"):
+        with st.expander(f"📄 {c['cliente']} ({c['data_inizio']} / {c['data_fine']})"):
             col1, col2, col3, col4 = st.columns([1,1,1,1.5])
-            col1.download_button("📜 Contratto", genera_pdf_completo(c, "CONTRATTO"), f"Contratto_{c['targa']}.pdf")
-            col2.download_button("💰 Fattura", genera_pdf_completo(c, "FATTURA"), f"Fattura_{c['id']}.pdf")
-            
+            col1.download_button("📜 Contratto", genera_pdf_completo(c, "CONTRATTO"), f"C_{c['targa']}.pdf")
+            col2.download_button("💰 Ricevuta", genera_pdf_completo(c, "FATTURA"), f"R_{c['id']}.pdf")
             if c.get("foto_path"):
                 u = supabase.storage.from_(BUCKET_NAME).get_public_url(c["foto_path"])
                 col3.link_button("📸 Foto", u)
             
-            # Tasto WhatsApp
-            msg = f"Ciao {c['cliente']}, ecco il riepilogo del tuo noleggio MasterRent.\nTarga: {c['targa']}\nPrezzo: {c['prezzo']}€\nBuon viaggio a Ischia!"
-            msg_enc = urllib.parse.quote(msg)
-            col4.link_button("💬 Invia WhatsApp", f"https://wa.me/?text={msg_enc}")
+            msg = urllib.parse.quote(f"Ciao {c['cliente']}, MasterRent ti conferma il noleggio della targa {c['targa']} fino al {c['data_fine']}. Grazie!")
+            col4.link_button("💬 WhatsApp", f"https://wa.me/?text={msg}")
 
 elif menu == "🚨 Gestione Multe":
-    st.header("🚨 Modulo per i Vigili")
-    t_m = st.text_input("Inserisci Targa da ricercare").upper()
+    st.header("🚨 Ricerca Multe")
+    t_m = st.text_input("Targa").upper()
     if t_m:
         res_m = supabase.table("contratti").select("*").eq("targa", t_m).execute()
         if res_m.data:
-            st.success(f"Trovato noleggio per: {res_m.data[0]['cliente']}")
-            st.download_button("📥 Scarica Modulo Vigili", genera_pdf_completo(res_m.data[0], "VIGILI"), f"Modulo_Vigili_{t_m}.pdf")
-        else: st.error("Nessun noleggio trovato per questa targa.")
+            st.write(f"Conducente: *{res_m.data[0]['cliente']}*")
+            st.download_button("📥 Modulo Vigili", genera_pdf_completo(res_m.data[0], "VIGILI"), f"Vigili_{t_m}.pdf")
