@@ -1,37 +1,46 @@
 import streamlit as st
 import datetime
-from fpdf import FPDF
 from supabase import create_client
-import time
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+import io
 
-# 1. CONNESSIONE
+# Connessione
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-def clean_t(t):
-    if not t or t == "None": return "---"
-    r = {'à': 'a', 'è': 'e', 'é': 'e', 'ì': 'i', 'ò': 'o', 'ù': 'u', '€': 'Euro', '’': "'", '°': 'o'}
-    for k, v in r.items(): t = str(t).replace(k, v)
-    return t.encode('latin-1', 'ignore').decode('latin-1')
+st.set_page_config(page_title="MasterRent V47", layout="wide")
 
-st.set_page_config(page_title="MasterRent V46", layout="wide")
+def genera_pdf_reportlab(titolo, contenuto):
+    buffer = io.BytesIO()
+    p = canvas.Canvas(buffer, pagesize=A4)
+    p.setFont("Helvetica-Bold", 16)
+    p.drawCentredString(300, 800, titolo)
+    
+    p.setFont("Helvetica", 12)
+    y = 750
+    for linea in contenuto.split('\n'):
+        p.drawString(50, y, linea)
+        y -= 20
+    
+    p.showPage()
+    p.save()
+    buffer.seek(0)
+    return buffer
 
 menu = st.sidebar.radio("Menu", ["📝 Nuovo Noleggio", "🗄️ Archivio"])
 
 if menu == "📝 Nuovo Noleggio":
-    st.subheader("Nuovo Noleggio")
-    with st.form("f_v46"):
-        c1, c2 = st.columns(2)
-        nome = c1.text_input("Nome Cliente")
-        targa = c1.text_input("Targa").upper()
-        prezzo = c2.number_input("Prezzo (€)", min_value=0.0)
-        cf = c2.text_input("Codice Fiscale")
+    with st.form("f_v47"):
+        nome = st.text_input("Nome Cliente")
+        targa = st.text_input("Targa").upper()
+        prezzo = st.number_input("Prezzo (€)", min_value=0.0)
+        cf = st.text_input("Codice Fiscale")
         accetto = st.checkbox("Accetto Privacy")
         if st.form_submit_button("💾 SALVA"):
             if nome and targa and accetto:
-                dat = {"cliente": nome, "targa": targa, "prezzo": prezzo, "cf": cf, "data_inizio": str(datetime.date.today())}
-                supabase.table("contratti").insert(dat).execute()
+                supabase.table("contratti").insert({"cliente": nome, "targa": targa, "prezzo": prezzo, "cf": cf, "data_inizio": str(datetime.date.today())}).execute()
                 st.success("Salvato!")
 
 elif menu == "🗄️ Archivio":
@@ -40,40 +49,12 @@ elif menu == "🗄️ Archivio":
         with st.expander(f"📄 {c['cliente']} - {c['targa']}"):
             col1, col2 = st.columns(2)
             
-            # --- PDF CONTRATTO ---
-            pdf_c = FPDF()
-            pdf_c.add_page()
-            pdf_c.set_font("Helvetica", 'B', 16)
-            pdf_c.cell(0, 10, "CONTRATTO DI NOLEGGIO", ln=1, align='C')
-            pdf_c.set_font("Helvetica", size=10); pdf_c.ln(10)
-            pdf_c.multi_cell(0, 7, clean_t(f"CLIENTE: {c['cliente']}\nTARGA: {c['targa']}\nCF: {c['cf']}"))
-            
-            # Trasformazione sicura in bytearray
-            data_c = bytearray(pdf_c.output())
-            
-            col1.download_button(
-                label="📜 CONTRATTO",
-                data=data_c,
-                file_name=f"C_{c['id']}.pdf",
-                mime="application/pdf",
-                key=f"c_{c['id']}"
-            )
+            # --- CONTRATTO ---
+            testo_c = f"CLIENTE: {c['cliente']}\nTARGA: {c['targa']}\nCF: {c['cf']}\nDATA: {c['data_inizio']}\n\nCONTRATTO DI NOLEGGIO SCOOTER\nIl cliente dichiara di ricevere il veicolo in ottimo stato."
+            pdf_c = genera_pdf_reportlab("CONTRATTO DI NOLEGGIO", testo_c)
+            col1.download_button("📜 SCARICA CONTRATTO", data=pdf_c, file_name=f"C_{c['id']}.pdf", mime="application/pdf", key=f"c_{c['id']}")
 
-            # --- PDF RICEVUTA ---
-            pdf_r = FPDF()
-            pdf_r.add_page()
-            pdf_r.set_font("Helvetica", 'B', 16)
-            pdf_r.cell(0, 10, "RICEVUTA DI PAGAMENTO", ln=1, align='C')
-            pdf_r.set_font("Helvetica", size=12); pdf_r.ln(20)
-            pdf_r.cell(0, 10, clean_t(f"TOTALE: {c['prezzo']} Euro"), ln=1)
-            
-            # Trasformazione sicura in bytearray
-            data_r = bytearray(pdf_r.output())
-            
-            col2.download_button(
-                label="💰 RICEVUTA",
-                data=data_r,
-                file_name=f"R_{c['id']}.pdf",
-                mime="application/pdf",
-                key=f"r_{c['id']}"
-            )
+            # --- RICEVUTA ---
+            testo_r = f"RICEVUTO DA: {c['cliente']}\nPER NOLEGGIO TARGA: {c['targa']}\n\nTOTALE PAGATO: Euro {c['prezzo']}\n\nGrazie per aver scelto MasterRent!"
+            pdf_r = genera_pdf_reportlab("RICEVUTA DI PAGAMENTO", testo_r)
+            col2.download_button("💰 SCARICA RICEVUTA", data=pdf_r, file_name=f"R_{c['id']}.pdf", mime="application/pdf", key=f"r_{c['id']}")
