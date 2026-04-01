@@ -4,6 +4,7 @@ from fpdf import FPDF
 from supabase import create_client
 from streamlit_drawable_canvas import st_canvas
 import time
+import random
 
 # 1. CONNESSIONE
 url = st.secrets["SUPABASE_URL"]
@@ -20,56 +21,66 @@ def clean_t(text):
     for k, v in r.items(): text = str(text).replace(k, v)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-def genera_pdf(c, tipo):
-    pdf = FPDF()
-    pdf.add_page()
-    
-    # Intestazione comune
+def header_master(pdf, tit):
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, DITTA, ln=True)
     pdf.set_font("Arial", size=9)
     pdf.multi_cell(0, 5, clean_t(DITTA_INFO))
     pdf.line(10, 32, 200, 32)
     pdf.ln(12)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, clean_t(tit), ln=True, align='C')
+    pdf.ln(5)
 
-    if tipo == "CONTRATTO":
-        pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, "CONTRATTO DI NOLEGGIO", ln=True, align='C'); pdf.ln(5)
-        pdf.set_font("Arial", size=10)
-        info = f"CLIENTE: {c.get('cliente')}\nNATO A: {c.get('luogo_nascita')}\nRESIDENTE: {c.get('residenza')}\nC.F.: {c.get('cf')}\nPATENTE: {c.get('num_doc')}\nTEL: {c.get('telefono')}\n\nVEICOLO: {c.get('targa')}\nDAL: {c.get('data_inizio')} AL: {c.get('data_fine')}"
-        pdf.multi_cell(0, 7, clean_t(info), border=1)
-        pdf.ln(5); pdf.set_font("Arial", 'B', 8); pdf.cell(0, 5, "CONDIZIONI (1-14):", ln=True)
-        pdf.set_font("Arial", size=6); pdf.multi_cell(0, 3, clean_t("1. Mezzo in ottimo stato. 2. Responsabilita danni/furto cliente. 3. Multe a carico cliente + 25.83 Euro. 4. Casco obbligatorio. 5. Foro Ischia. 6. Privacy GDPR."), border='T')
-        pdf.ln(20); pdf.cell(0, 10, "Firma del Cliente: ______________________", align='R')
-    
-    elif tipo == "RICEVUTA":
-        pdf.set_font("Arial", 'B', 15); pdf.cell(0, 10, "RICEVUTA DI PAGAMENTO", ln=True, align='C'); pdf.ln(15)
-        pdf.set_font("Arial", size=12)
-        pdf.cell(0, 10, clean_t(f"Ricevuto da: {c.get('cliente')}"), ln=True)
-        pdf.cell(0, 10, clean_t(f"Per noleggio veicolo targa: {c.get('targa')}"), ln=True)
-        pdf.ln(20); pdf.set_font("Arial", 'B', 22)
-        pdf.cell(0, 25, clean_t(f"TOTALE: Euro {c.get('prezzo')}"), border=1, ln=True, align='C')
+# --- FUNZIONI PDF TOTALMENTE INDIPENDENTI ---
+def crea_pdf_CONTRATTO(c):
+    pdf = FPDF()
+    pdf.add_page()
+    header_master(pdf, "CONTRATTO DI NOLEGGIO")
+    pdf.set_font("Arial", size=10)
+    info = (f"CLIENTE: {c.get('cliente')}\nNATO A: {c.get('luogo_nascita')}\n"
+            f"RESIDENTE: {c.get('residenza')}\nC.F.: {c.get('cf')}\n"
+            f"PATENTE: {c.get('num_doc')}\nTEL: {c.get('telefono')}\n\n"
+            f"VEICOLO: {c.get('targa')}\nDAL: {c.get('data_inizio')} AL: {c.get('data_fine')}")
+    pdf.multi_cell(0, 7, clean_t(info), border=1)
+    pdf.ln(5); pdf.set_font("Arial", 'B', 8); pdf.cell(0, 5, "CONDIZIONI GENERALI:", ln=True)
+    pdf.set_font("Arial", size=6); pdf.multi_cell(0, 3, clean_t("Responsabilita totale danni/furto. Multe a carico cliente + 25.83 euro gestione. Obbligo casco. Foro Ischia. Privacy GDPR."), border='T')
+    pdf.ln(20); pdf.cell(0, 10, "Firma Cliente: ______________________", align='R')
+    return pdf.output(dest='S').encode('latin-1')
 
-    elif tipo == "VIGILI":
-        pdf.set_font("Arial", 'B', 12); pdf.cell(0, 10, "DICHIARAZIONE DATI CONDUCENTE", ln=True, align='C'); pdf.ln(10)
-        pdf.set_font("Arial", size=11)
-        t = (f"La sottoscritta BATTAGLIA MARIANNA dichiara che il veicolo targa {c.get('targa')} "
-             f"in data {c.get('data_inizio')} era affidato al Sig. {c.get('cliente')}.\n"
-             f"Nato a: {c.get('luogo_nascita')}\nResidente in: {c.get('residenza')}\nPatente: {c.get('num_doc')}\n\n"
-             f"Si richiede rinotifica verbale ai sensi della L. 445/2000.")
-        pdf.multi_cell(0, 8, clean_t(t))
-        pdf.ln(30); pdf.cell(0, 10, "Timbro e Firma: ______________________", align='R')
+def crea_pdf_RICEVUTA(c):
+    pdf = FPDF()
+    pdf.add_page()
+    header_master(pdf, "RICEVUTA DI PAGAMENTO")
+    pdf.set_font("Arial", size=12); pdf.ln(10)
+    pdf.cell(0, 10, clean_t(f"Ricevuto da: {c.get('cliente')}"), ln=True)
+    pdf.cell(0, 10, clean_t(f"Per noleggio veicolo targa: {c.get('targa')}"), ln=True)
+    pdf.ln(20); pdf.set_font("Arial", 'B', 22)
+    pdf.cell(0, 25, clean_t(f"TOTALE: Euro {c.get('prezzo')}"), border=1, ln=True, align='C')
+    return pdf.output(dest='S').encode('latin-1')
 
+def crea_pdf_VIGILI(c):
+    pdf = FPDF()
+    pdf.add_page()
+    header_master(pdf, "MODULO RINOTIFICA VIGILI")
+    pdf.set_font("Arial", size=11); pdf.ln(5)
+    t = (f"La sottoscritta BATTAGLIA MARIANNA dichiara che il veicolo targa {c.get('targa')} "
+         f"in data {c.get('data_inizio')} era affidato al Sig. {c.get('cliente')}.\n"
+         f"Nato a: {c.get('luogo_nascita')}\nResidente in: {c.get('residenza')}\n"
+         f"Patente: {c.get('num_doc')}\n\nSi richiede rinotifica ai sensi della L. 445/2000.")
+    pdf.multi_cell(0, 8, clean_t(t))
+    pdf.ln(30); pdf.cell(0, 10, "Firma: ______________________", align='R')
     return pdf.output(dest='S').encode('latin-1')
 
 # --- INTERFACCIA ---
-st.set_page_config(page_title="MasterRent Management", layout="wide")
-menu = st.sidebar.radio("Scegli", ["📝 Nuovo", "🗄️ Archivio", "🚨 Multe"])
+st.set_page_config(page_title="MasterRent V28", layout="wide")
+menu = st.sidebar.radio("Scegli", ["Nuovo", "Archivio", "Multe"])
 
-if menu == "📝 Nuovo":
-    with st.form("form_v27"):
+if menu == "Nuovo":
+    with st.form("f_v28"):
         c1, c2 = st.columns(2)
-        nome = c1.text_input("Cognome Nome")
-        cf = c2.text_input("C.F.")
+        nome = c1.text_input("Nome Cliente")
+        cf = c2.text_input("Codice Fiscale")
         nasc = c1.text_input("Luogo Nascita")
         res = c2.text_input("Residenza")
         pat = c1.text_input("Patente")
@@ -80,32 +91,28 @@ if menu == "📝 Nuovo":
         df = st.date_input("Fine")
         st.write("---")
         accetto = st.checkbox("Accetto Condizioni e Privacy")
-        foto = st.camera_input("Foto Patente")
-        st.write("Firma Cliente:")
-        st_canvas(height=100, stroke_width=2, key="firma_v27")
-        if st.form_submit_button("SALVA NOLEGGIO"):
+        st.camera_input("Foto Patente", key="foto_v28")
+        st_canvas(height=100, key="firma_v28")
+        if st.form_submit_button("SALVA"):
             if accetto:
-                fn = f"{targa}_{int(time.time())}.jpg"
-                if foto: supabase.storage.from_(BUCKET_NAME).upload(fn, foto.getvalue())
-                dat = {"cliente": nome, "cf": cf, "luogo_nascita": nasc, "residenza": res, "num_doc": pat, "targa": targa, "prezzo": prezzo, "data_inizio": str(di), "data_fine": str(df), "telefono": tel, "foto_path": fn if foto else None}
+                dat = {"cliente": nome, "cf": cf, "luogo_nascita": nasc, "residenza": res, "num_doc": pat, "targa": targa, "prezzo": prezzo, "data_inizio": str(di), "data_fine": str(df), "telefono": tel}
                 supabase.table("contratti").insert(dat).execute()
-                st.success("Salvato in Archivio!")
-            else: st.error("Spunta la casella di accettazione!")
+                st.success("Noleggio Salvato!")
 
-elif menu == "🗄️ Archivio":
+elif menu == "Archivio":
     res = supabase.table("contratti").select("*").order("id", desc=True).execute()
     for c in res.data:
-        with st.expander(f"📄 {c['cliente']} - {c['targa']}"):
-            col1, col2, col3 = st.columns(3)
-            col1.download_button("📜 CONTRATTO", genera_pdf(c, "CONTRATTO"), f"Contr_{c['id']}.pdf", key=f"c_{c['id']}")
-            col2.download_button("💰 RICEVUTA", genera_pdf(c, "RICEVUTA"), f"Ricev_{c['id']}.pdf", key=f"r_{c['id']}")
-            if c.get("foto_path"):
-                u = supabase.storage.from_(BUCKET_NAME).get_public_url(c["foto_path"])
-                col3.link_button("📸 PATENTE", u)
+        with st.expander(f"{c['cliente']} - {c['targa']}"):
+            col1, col2 = st.columns(2)
+            # Nomi file dinamici per fregare la cache del browser
+            ts = int(time.time())
+            col1.download_button("📜 CONTRATTO", crea_pdf_CONTRATTO(c), f"Contr_{c['id']}{ts}.pdf", key=f"c{c['id']}_{ts}")
+            col2.download_button("💰 RICEVUTA", crea_pdf_RICEVUTA(c), f"Ricev_{c['id']}{ts}.pdf", key=f"r{c['id']}_{ts}")
 
-elif menu == "🚨 Multe":
-    t_m = st.text_input("Inserisci Targa").upper()
+elif menu == "Multe":
+    t_m = st.text_input("Cerca Targa").upper()
     if t_m:
         rm = supabase.table("contratti").select("*").eq("targa", t_m).execute()
         if rm.data:
-            st.download_button("🚨 MODULO VIGILI", genera_pdf(rm.data[0], "VIGILI"), f"Vigili_{t_m}.pdf")
+            ts = int(time.time())
+            st.download_button("🚨 MODULO VIGILI", crea_pdf_VIGILI(rm.data[0]), f"Vigili_{t_m}{ts}.pdf", key=f"v{t_m}")
