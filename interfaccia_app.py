@@ -2,6 +2,7 @@ import streamlit as st
 import datetime
 from fpdf import FPDF
 from supabase import create_client
+import io
 import time
 
 # Connessione
@@ -15,13 +16,13 @@ def clean_t(t):
     for k, v in r.items(): t = str(t).replace(k, v)
     return t.encode('latin-1', 'ignore').decode('latin-1')
 
-st.set_page_config(page_title="MasterRent V44", layout="wide")
+st.set_page_config(page_title="MasterRent V45", layout="wide")
 
 menu = st.sidebar.radio("Menu", ["📝 Nuovo Noleggio", "🗄️ Archivio"])
 
 if menu == "📝 Nuovo Noleggio":
     st.subheader("Registrazione Noleggio")
-    with st.form("f_v44"):
+    with st.form("f_v45"):
         c1, c2 = st.columns(2)
         nome = c1.text_input("Nome Cliente")
         cf = c2.text_input("Codice Fiscale")
@@ -47,23 +48,32 @@ if menu == "📝 Nuovo Noleggio":
 elif menu == "🗄️ Archivio":
     res = supabase.table("contratti").select("*").order("id", desc=True).execute()
     for c in res.data:
-        with st.expander(f"{c['cliente']} - {c['targa']}"):
+        with st.expander(f"📂 {c['cliente']} - {c['targa']}"):
             col1, col2 = st.columns(2)
             
-            # PDF CONTRATTO
+            # --- GENERAZIONE CONTRATTO ---
             pdf_c = FPDF()
             pdf_c.add_page()
             pdf_c.set_font("Helvetica", 'B', 16)
             pdf_c.cell(0, 10, "CONTRATTO DI NOLEGGIO", ln=1, align='C')
             pdf_c.set_font("Helvetica", size=10); pdf_c.ln(10)
-            info = f"CLIENTE: {c['cliente']}\nCF: {c['cf']}\nTARGA: {c['targa']}\nNATO A: {c.get('luogo_nascita','---')}"
-            pdf_c.multi_cell(0, 7, clean_t(info), border=1)
+            info_c = f"CLIENTE: {c['cliente']}\nCF: {c['cf']}\nTARGA: {c['targa']}\nNATO A: {c.get('luogo_nascita','---')}"
+            pdf_c.multi_cell(0, 7, clean_t(info_c), border=1)
             
-            # Scarico come stringa di byte (Metodo sicuro)
-            pdf_output_c = pdf_c.output()
-            col1.download_button("📜 CONTRATTO", bytes(pdf_output_c), f"C_{c['id']}.pdf", "application/pdf", key=f"c_{c['id']}")
+            # Trasformazione in BytesIO (Il metodo che non fallisce)
+            buf_c = io.BytesIO()
+            buf_c.write(pdf_c.output())
+            buf_c.seek(0)
+            
+            col1.download_button(
+                label="📜 CONTRATTO",
+                data=buf_c,
+                file_name=f"Contr_{c['id']}.pdf",
+                mime="application/pdf",
+                key=f"btn_c_{c['id']}"
+            )
 
-            # PDF RICEVUTA
+            # --- GENERAZIONE RICEVUTA ---
             pdf_r = FPDF()
             pdf_r.add_page()
             pdf_r.set_font("Helvetica", 'B', 16)
@@ -72,5 +82,14 @@ elif menu == "🗄️ Archivio":
             pdf_r.cell(0, 10, clean_t(f"Ricevuto da: {c['cliente']}"), ln=1)
             pdf_r.cell(0, 20, clean_t(f"TOTALE: {c['prezzo']} Euro"), border=1, align='C')
             
-            pdf_output_r = pdf_r.output()
-            col2.download_button("💰 RICEVUTA", bytes(pdf_output_r), f"R_{c['id']}.pdf", "application/pdf", key=f"r_{c['id']}")
+            buf_r = io.BytesIO()
+            buf_r.write(pdf_r.output())
+            buf_r.seek(0)
+            
+            col2.download_button(
+                label="💰 RICEVUTA",
+                data=buf_r,
+                file_name=f"Ricev_{c['id']}.pdf",
+                mime="application/pdf",
+                key=f"btn_r_{c['id']}"
+            )
