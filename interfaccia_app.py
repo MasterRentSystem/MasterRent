@@ -5,59 +5,52 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 import io
 
-# Connessione (Prendi i segreti)
+# Connessione
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-st.set_page_config(page_title="MasterRent Ischia V1", layout="wide")
-
-def crea_pdf(titolo, dati_cliente):
+def crea_pdf(titolo, info):
     buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawCentredString(300, 800, titolo)
-    c.setFont("Helvetica", 12)
-    text = c.beginText(50, 750)
-    for linea in dati_cliente.split('\n'):
-        text.textLine(linea)
-    c.drawText(text)
-    c.showPage()
-    c.save()
+    p = canvas.Canvas(buf, pagesize=A4)
+    p.setFont("Helvetica-Bold", 16)
+    p.drawCentredString(300, 800, titolo)
+    p.setFont("Helvetica", 12)
+    y = 750
+    for linea in info.split('\n'):
+        p.drawString(50, y, linea)
+        y -= 20
+    p.showPage()
+    p.save()
     buf.seek(0)
     return buf
 
-st.title("🛵 MasterRent - Gestione Noleggi")
+st.title("🛵 MasterRent Ischia - V65")
 
-tab1, tab2 = st.tabs(["📝 Nuovo", "🗄️ Archivio"])
+tab1, tab2 = st.tabs(["📝 Nuovo Noleggio", "🗄️ Archivio"])
 
 with tab1:
-    with st.form("nuovo_noleggio"):
-        nome = st.text_input("Nome Cliente")
-        targa = st.text_input("Targa").upper()
-        prezzo = st.number_input("Prezzo (€)", min_value=0.0)
-        accetto = st.checkbox("Accetto Privacy e Condizioni")
+    with st.form("f_v65"):
+        n = st.text_input("Nome Cliente")
+        t = st.text_input("Targa").upper()
+        p = st.number_input("Prezzo (€)", min_value=0.0)
         if st.form_submit_button("SALVA"):
-            if nome and targa and accetto:
-                supabase.table("contratti").insert({"cliente": nome, "targa": targa, "prezzo": prezzo, "data_inizio": str(datetime.date.today())}).execute()
-                st.success("Dati salvati!")
-            else:
-                st.error("Mancano dati o spunta privacy!")
+            if n and t:
+                supabase.table("contratti").insert({"cliente": n, "targa": t, "prezzo": p, "data_inizio": str(datetime.date.today())}).execute()
+                st.success("Salvato!")
 
 with tab2:
-    res = supabase.table("contratti").select("*").order("id", desc=True).limit(10).execute()
-    for n in res.data:
-        with st.expander(f"{n['cliente']} - {n['targa']}"):
+    res = supabase.table("contratti").select("*").order("id", desc=True).limit(15).execute()
+    for row in res.data:
+        with st.expander(f"📄 {row['cliente']} - {row['targa']}"):
             c1, c2 = st.columns(2)
             
-            # Preparo i dati
-            info = f"Cliente: {n['cliente']}\nTarga: {n['targa']}\nData: {n['data_inizio']}\nPrezzo: {n['prezzo']} Euro"
+            # --- LOGICA PDF 1: CONTRATTO ---
+            info_c = f"CONTRATTO DI NOLEGGIO\nCliente: {row['cliente']}\nTarga: {row['targa']}\nData: {row['data_inizio']}"
+            pdf_c = crea_pdf("CONTRATTO DI NOLEGGIO", info_c)
+            c1.download_button("📜 CONTRATTO", pdf_c, f"C_{row['id']}.pdf", "application/pdf", key=f"c_{row['id']}")
             
-            # Bottone 1: Contratto
-            pdf_contratto = crea_pdf("CONTRATTO DI NOLEGGIO", info + "\n\nFirma: ______________")
-            c1.download_button("📜 Scarica Contratto", pdf_contratto, f"Contratto_{n['id']}.pdf", "application/pdf", key=f"btn_c_{n['id']}")
-            
-            # Bottone 2: Ricevuta
-            pdf_ricevuta = crea_pdf("RICEVUTA DI PAGAMENTO", info + "\n\nPagamento Ricevuto.")
-            c2.download_button("💰 Scarica Ricevuta", pdf_ricevuta, f"Ricevuta_{n['id']}.pdf", "application/pdf", key=f"btn_r_{n['id']}")
-
+            # --- LOGICA PDF 2: RICEVUTA ---
+            info_r = f"RICEVUTA DI PAGAMENTO\nRicevuto da: {row['cliente']}\nPer targa: {row['targa']}\nTOTALE: {row['prezzo']} Euro"
+            pdf_r = crea_pdf("RICEVUTA DI PAGAMENTO", info_r)
+            c2.download_button("💰 RICEVUTA", pdf_r, f"R_{row['id']}.pdf", "application/pdf", key=f"r_{row['id']}")
