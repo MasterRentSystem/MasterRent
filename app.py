@@ -4,9 +4,9 @@ from fpdf import FPDF
 from supabase import create_client
 from streamlit_drawable_canvas import st_canvas
 
-st.set_page_config(layout="wide", page_title="MasterRent Pro")
-st.title("🛵 MasterRent - Gestione Contratti & Multe")
+st.set_page_config(layout="wide", page_title="MasterRent - Battaglia Marianna")
 
+# Connessione
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
@@ -17,82 +17,97 @@ def clean(t):
     for k,v in repl.items(): t = str(t).replace(k,v)
     return t.encode("latin-1", "ignore").decode("latin-1")
 
-def genera_pdf(c, tipo="CONTRATTO"):
+def genera_pdf_professionale(c, tipo="CONTRATTO"):
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "MASTERRENT ISCHIA", ln=True, align="C")
+    
+    # --- INTESTAZIONE MARIANNA BATTAGLIA ---
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 7, "BATTAGLIA MARIANNA", ln=True, align="L")
+    pdf.set_font("Arial", size=9)
+    pdf.cell(0, 5, "Via Cognole, 5 - 80075 Forio (NA)", ln=True, align="L")
+    pdf.cell(0, 5, "Cod. Fisc. BTTMNN87A53Z112S - P. IVA 10252601215", ln=True, align="L")
+    pdf.ln(10)
+    
+    # Titolo Documento
+    pdf.set_font("Arial", "B", 12)
+    titolo = "DICHIARAZIONE DATI CONDUCENTE" if tipo == "MULTE" else f"{tipo} DI PAGAMENTO / NOLEGGIO"
+    pdf.cell(0, 10, clean(titolo), ln=True, align="C", border="B")
+    pdf.ln(5)
+
+    # --- CORPO DEL DOCUMENTO ---
+    pdf.set_font("Arial", size=10)
     
     if tipo == "MULTE":
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, "DICHIARAZIONE DATI CONDUCENTE (ACCERTAMENTO VIOLAZIONE)", ln=True, align="C")
-        pdf.ln(5)
-        pdf.set_font("Arial", size=11)
-        testo = (f"Il sottoscritto titolare della ditta MasterRent, in relazione al verbale di contestazione,\n"
-                 f"comunica che in data odierna il veicolo targa {c.get('targa','')} era locato a:\n\n"
-                 f"CONDUCENTE: {c.get('nome','')} {c.get('cognome','')}\n"
-                 f"NATO IL: {c.get('data_nascita','N/A')}\n"
-                 f"RESIDENTE IN: {c.get('indirizzo','N/A')}\n"
-                 f"CODICE FISCALE: {c.get('codice_fiscale','N/A')}\n"
-                 f"PATENTE N: {c.get('numero_patente','N/A')}\n\n"
-                 f"Si allega copia del contratto di noleggio e del documento d'identita.")
-        pdf.multi_cell(0, 8, clean(testo))
+        testo_multe = (
+            f"La sottoscritta BATTAGLIA MARIANNA, titolare della ditta MasterRent,\n"
+            f"in riferimento all'accertamento di violazione sul veicolo TARGA: {c.get('targa','')}\n"
+            f"comunica che in data {c.get('data_contratto',' ')[:10]} il mezzo era affidato a:\n\n"
+            f"CONDUCENTE: {c.get('nome','')} {c.get('cognome','')}\n"
+            f"NATO A: {c.get('luogo_nascita','_____')}\n"
+            f"RESIDENTE: {c.get('indirizzo','_____')}\n"
+            f"C.F.: {c.get('codice_fiscale','')}\n"
+            f"PATENTE N: {c.get('numero_patente','')}\n\n"
+            f"Si rilascia la presente per gli usi consentiti dalla legge."
+        )
+        pdf.multi_cell(0, 8, clean(testo_multe))
     else:
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, clean(f"{tipo} DI NOLEGGIO"), ln=True, align="C")
-        pdf.ln(5)
-        pdf.set_font("Arial", size=10)
-        dati = (f"CLIENTE: {c.get('nome','')} {c.get('cognome','')}\n"
-                f"INDIRIZZO: {c.get('indirizzo','')}\n"
-                f"CF: {c.get('codice_fiscale','')} | Patente: {c.get('numero_patente','')}\n"
-                f"Tel: {c.get('telefono','')} | Targa: {c.get('targa','')} | Prezzo: {c.get('prezzo',0)}€")
-        pdf.multi_cell(0, 7, clean(dati), border=1)
-
-    if tipo == "CONTRATTO":
-        pdf.ln(5)
-        pdf.set_font("Arial", "B", 9)
-        pdf.cell(0, 7, "CONDIZIONI LEGALI E PRIVACY", ln=True)
-        pdf.set_font("Arial", size=8)
-        pdf.multi_cell(0, 5, clean("1. Il cliente risponde di danni e multe.\n2. Consegna e reso con pieno.\n3. Privacy GDPR Reg. UE 2016/679."))
-        pdf.ln(10)
-        pdf.cell(0, 10, "Firma: ______________________________", ln=True)
+        dati_client = (
+            f"CLIENTE: {c.get('nome','')} {c.get('cognome','')}\n"
+            f"NATO A: {c.get('luogo_nascita','')}\n"
+            f"RESIDENTE: {c.get('indirizzo','')}\n"
+            f"C.F.: {c.get('codice_fiscale','')}\n"
+            f"TARGA: {c.get('targa','')} | PATENTE: {c.get('numero_patente','')}\n"
+            f"PREZZO: {c.get('prezzo',0)} Euro"
+        )
+        pdf.multi_cell(0, 8, clean(dati_client), border=1)
         
+        if tipo == "CONTRATTO":
+            pdf.ln(5)
+            pdf.set_font("Arial", "B", 9)
+            pdf.cell(0, 7, "CONDIZIONI E PRIVACY (GDPR)", ln=True)
+            pdf.set_font("Arial", size=8)
+            pdf.multi_cell(0, 4, clean("Il cliente e responsabile per multe e danni. Il veicolo viene consegnato integro.\nI dati sono trattati per fini contrattuali (Reg. UE 2016/679)."))
+            pdf.ln(15)
+            pdf.cell(0, 10, "FIRMA DEL CLIENTE: ______________________________", ln=True)
+
     return bytes(pdf.output())
 
-# FORM
-with st.form("noleggio_form"):
-    st.subheader("📝 Nuova Anagrafica Cliente")
+# --- INTERFACCIA APP ---
+st.title("🛵 MasterRent Ischia - Gestione")
+
+with st.form("form_noleggio"):
     c1, c2 = st.columns(2)
     n = c1.text_input("Nome")
     cog = c1.text_input("Cognome")
-    ind = c1.text_input("Indirizzo di Residenza")
-    cf = c1.text_input("Codice Fiscale")
+    luogo = c1.text_input("Luogo di Nascita")
+    ind = c1.text_input("Indirizzo Residenza")
     
-    tel = c2.text_input("Telefono")
+    cf = c2.text_input("Codice Fiscale")
     pat = c2.text_input("N. Patente")
     tar = c2.text_input("Targa").upper()
     pre = c2.number_input("Prezzo (€)", min_value=0.0)
     
     st.write("✍️ *FIRMA E PRIVACY*")
-    canvas = st_canvas(stroke_width=2, height=100, width=300, key="firma_v200")
+    canvas = st_canvas(stroke_width=2, height=100, width=300, key="firma_v210")
     priv = st.checkbox("Accetto Condizioni e Privacy GDPR")
 
-    if st.form_submit_button("💾 SALVA TUTTO"):
+    if st.form_submit_button("💾 SALVA E GENERA"):
         if n and tar and priv:
-            dati = {"nome": n, "cognome": cog, "indirizzo": ind, "codice_fiscale": cf, 
-                    "telefono": tel, "numero_patente": pat, "targa": tar, 
+            dati = {"nome": n, "cognome": cog, "luogo_nascita": luogo, "indirizzo": ind, 
+                    "codice_fiscale": cf, "numero_patente": pat, "targa": tar, 
                     "prezzo": pre, "privacy_accettata": True}
             supabase.table("contratti").insert(dati).execute()
-            st.success("✅ Salvato!")
+            st.success("✅ Contratto registrato!")
         else:
-            st.error("Mancano dati obbligatori!")
+            st.error("Mancano dati o Privacy non accettata!")
 
 # ARCHIVIO
 st.divider()
 res = supabase.table("contratti").select("*").order("id", desc=True).execute()
 for c in res.data:
     with st.expander(f"📄 {c.get('nome','')} - {c.get('targa','')}"):
-        col_a, col_b, col_c = st.columns(3)
-        col_a.download_button("📜 CONTRATTO", genera_pdf(c, "CONTRATTO"), f"C_{c['id']}.pdf", key=f"c_{c['id']}")
-        col_b.download_button("💰 RICEVUTA", genera_pdf(c, "RICEVUTA"), f"R_{c['id']}.pdf", key=f"r_{c['id']}")
-        col_c.download_button("🚨 MODULO VIGILI", genera_pdf(c, "MULTE"), f"Vigili_{c['targa']}.pdf", key=f"m_{c['id']}")
+        col1, col2, col3 = st.columns(3)
+        col1.download_button("📜 CONTRATTO", genera_pdf_professionale(c, "CONTRATTO"), f"C_{c['id']}.pdf")
+        col2.download_button("💰 RICEVUTA", genera_pdf_professionale(c, "RICEVUTA"), f"R_{c['id']}.pdf")
+        col3.download_button("🚨 MODULO MULTE", genera_pdf_professionale(c, "MULTE"), f"Multe_{c['targa']}.pdf")
