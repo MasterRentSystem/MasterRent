@@ -94,43 +94,24 @@ with st.form("contratto"):
             st.error("Dati mancanti o privacy non accettata")
         else:
             numero = prossimo_numero()
-           # Salvataggio con i nomi ESATTI del tuo database
-            dati = {
-                "nome": nome,
-                "cognome": cognome,
-                "telefono": tel,
-                "numero_patente": pat,
-                "targa": targa,
-                "prezzo": prezzo,
-                "indirizzo": indirizzo,
-                "luogo_nascita": luogo_n,
-                "data_nascita": str(data_n),
-                "privacy_accettata": True  # Nome corretto come da tua lista
-            }
-            
+ # --- SALVATAGGIO DATI ---
             try:
-               # 1. Prepariamo i dati (Senza graffe doppie fuori!)
-            dati = {
-                "nome": nome,
-                "cognome": cognome,
-                "telefono": tel,
-                "numero_patente": pat,
-                "targa": targa,
-                "prezzo": prezzo,
-                "indirizzo": indirizzo,
-                "luogo_nascita": luogo_n,
-                "data_nascita": str(data_n),
-                "privacy_accettata": True
-            }
-            
-            # 2. Salviamo (Assicurati che non ci siano altre } qui sotto)
-            try:
+                dati = {
+                    "nome": nome,
+                    "cognome": cognome,
+                    "telefono": tel,
+                    "numero_patente": pat,
+                    "targa": targa,
+                    "prezzo": prezzo,
+                    "indirizzo": indirizzo,
+                    "luogo_nascita": luogo_n,
+                    "data_nascita": str(data_n),
+                    "privacy_accettata": True
+                }
                 supabase.table("contratti").insert(dati).execute()
-                st.success(f"✅ Salvato! Ora trovi i 3 TASTI nell'archivio.")
+                st.success(f"✅ Contratto di {nome} salvato con successo!")
             except Exception as e:
                 st.error(f"Errore database: {e}")
-            supabase.table("contratti").insert(dati).execute()
-            st.success(f"Salvato! Fattura n. {numero}")
 
 # --- ARCHIVIO ---
 st.divider()
@@ -138,12 +119,14 @@ st.header("Archivio Contratti")
 res = supabase.table("contratti").select("*").order("id", desc=True).execute()
 
 for c in res.data:
-    num_f = c.get('numero_fattura', 'N/D')
+    num_f = c.get('id', '0')
     nome_c = c.get('nome', 'Sconosciuto')
     cognome_c = c.get('cognome', '')
     targa_c = c.get('targa', 'No Targa')
-    with st.expander(f"{num_f} - {nome_c} {cognome_c} - {targa_c}"):
+
+    with st.expander(f"ID: {num_f} - {nome_c} {cognome_c} - {targa_c}"):
         col1, col2, col3 = st.columns(3)
-        col1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"C_{c.get('id','0')}.pdf")
-        col2.download_button("💰 Fattura", genera_pdf_tipo(c, "FATTURA"), f"F_{c.get('id','0')}.pdf")
+        # Generazione PDF con i 3 tasti
+        col1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"C_{num_f}.pdf")
+        col2.download_button("💰 Fattura", genera_pdf_tipo(c, "FATTURA"), f"F_{num_f}.pdf")
         col3.download_button("🚨 Modulo Multe", genera_pdf_tipo(c, "MULTE"), f"M_{targa_c}.pdf")
