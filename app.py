@@ -67,7 +67,7 @@ def genera_pdf_tipo(c, tipo="CONTRATTO"):
         pdf.ln(10)
         pdf.cell(0, 10, "FIRMA CLIENTE: ________________________", ln=True)
     
-    return pdf.output(dest="S").encode("latin-1", "ignore")
+    return bytes(pdf.output())
 
 # --- FORM ---
 with st.form("contratto"):
