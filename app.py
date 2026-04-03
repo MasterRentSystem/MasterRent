@@ -1,10 +1,17 @@
 import streamlit as st
+import datetime
+import base64
 from fpdf import FPDF
 from supabase import create_client
 from streamlit_drawable_canvas import st_canvas
 
-st.set_page_config(layout="wide", page_title="MasterRent V240")
-url, key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"]
+st.set_page_config(layout="wide", page_title="MasterRent Pro")
+
+# --- DATI FISCALI FISSI ---
+INTESTAZIONE = "BATTAGLIA MARIANNA\nVia Cognole, 5 - 80075 Forio (NA)\nC.F. BTTMNN87A53Z112S - P. IVA 10252601215"
+
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
 def clean(t):
@@ -13,50 +20,97 @@ def clean(t):
     for k,v in repl.items(): t = str(t).replace(k,v)
     return t.encode("latin-1", "ignore").decode("latin-1")
 
-def genera_pdf(c, tipo="CONTRATTO"):
+def prossimo_numero():
+    anno = datetime.date.today().year
+    res = supabase.table("contatore_fatture").select("*").eq("anno", anno).execute()
+    if not res.data:
+        supabase.table("contatore_fatture").insert({"anno": anno, "ultimo_numero": 1}).execute()
+        return 1
+    numero = res.data[0]["ultimo_numero"] + 1
+    supabase.table("contatore_fatture").update({"ultimo_numero": numero}).eq("anno", anno).execute()
+    return numero
+
+# --- PDF GENERATOR ---
+def genera_pdf_tipo(c, tipo="CONTRATTO"):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 7, "BATTAGLIA MARIANNA", ln=True)
-    pdf.set_font("Arial", size=9)
-    pdf.cell(0, 5, "Via Cognole, 5 - 80075 Forio (NA)", ln=True)
-    pdf.cell(0, 5, "C.F. BTTMNN87A53Z112S - P. IVA 10252601215", ln=True)
-    pdf.ln(10)
+    pdf.multi_cell(0, 7, clean(INTESTAZIONE))
+    pdf.ln(5)
+    
     pdf.set_font("Arial", "B", 12)
-    titolo = "MODULO DATI CONDUCENTE (MULTE)" if tipo == "MULTE" else f"{tipo} DI NOLEGGIO"
+    titolo = "MODULO DATI CONDUCENTE (PER MULTE)" if tipo == "MULTE" else f"{tipo} DI NOLEGGIO"
     pdf.cell(0, 10, clean(titolo), ln=True, align="C", border="B")
     pdf.ln(5)
-    pdf.set_font("Arial", size=10)
+
+    pdf.set_font("Arial", size=11)
     if tipo == "MULTE":
-        t = f"Il veicolo TARGA {c.get('targa','')} in data {c.get('data_contratto',' ')[:10]} era affidato a:\n\nCONDUCENTE: {c.get('nome','')} {c.get('cognome','')}\nNATO A: {c.get('luogo_nascita','')}\nRESIDENTE: {c.get('indirizzo','')}\nC.F.: {c.get('codice_fiscale','')}\nPATENTE: {c.get('numero_patente','')}"
-        pdf.multi_cell(0, 8, clean(t))
+        testo = f"Il veicolo targa {c['targa']} in data {str(c.get('data_contratto',''))[:10]} era affidato a:\n\n" \
+                f"CLIENTE: {c['nome']} {c['cognome']}\n" \
+                f"NATO A: {c.get('luogo_nascita','')}\n" \
+                f"RESIDENTE IN: {c.get('indirizzo','')}\n" \
+                f"C.F.: {c['codice_fiscale']}\n" \
+                f"PATENTE: {c['numero_patente']}\n\n" \
+                f"Si rilascia per accertamento violazione."
     else:
-        info = f"CLIENTE: {c.get('nome','')} {c.get('cognome','')}\nRESIDENTE: {c.get('indirizzo','')}\nC.F.: {c.get('codice_fiscale','')}\nTARGA: {c.get('targa','')} | PATENTE: {c.get('numero_patente','')}\nPREZZO: {c.get('prezzo',0)} Euro"
-        pdf.multi_cell(0, 8, clean(info), border=1)
+        testo = f"CLIENTE: {c['nome']} {c['cognome']}\n" \
+                f"RESIDENTE: {c.get('indirizzo','')}\n" \
+                f"C.F.: {c['codice_fiscale']}\n" \
+                f"TARGA: {c['targa']} | PATENTE: {c['numero_patente']}\n" \
+                f"PREZZO: Euro {c['prezzo']}\n"
         if tipo == "CONTRATTO":
-            pdf.ln(5); pdf.set_font("Arial", "B", 9); pdf.cell(0, 7, "CONDIZIONI LEGALI & PRIVACY", ln=True)
-            pdf.set_font("Arial", size=8); pdf.multi_cell(0, 4, clean("Responsabilita danni e multe a carico del cliente. Privacy GDPR Reg. UE 2016/679."))
-            pdf.ln(15); pdf.cell(0, 10, "FIRMA DEL CLIENTE: ______________________________", ln=True)
-    return bytes(pdf.output())
+            testo += "\n\nCLAUSOLE: Il cliente e responsabile per danni e MULTE.\n" \
+                     "Privacy: Dati trattati secondo Reg. UE 2016/679 (GDPR)."
 
-st.header("🛵 MasterRent V240 - Marianna")
-with st.form("f"):
-    c1, c2 = st.columns(2)
-    n, cog = c1.text_input("Nome"), c1.text_input("Cognome")
-    luo, ind = c1.text_input("Luogo Nascita"), c1.text_input("Indirizzo Residenza")
-    cf, pat = c2.text_input("Codice Fiscale"), c2.text_input("N. Patente")
-    tar, pre = c2.text_input("Targa").upper(), c2.number_input("Prezzo (€)", min_value=0.0)
-    st_canvas(stroke_width=2, height=100, width=300, key="v240")
-    if st.form_submit_button("💾 SALVA"):
-        d = {"nome":n,"cognome":cog,"luogo_nascita":luo,"indirizzo":ind,"codice_fiscale":cf,"numero_patente":pat,"targa":tar,"prezzo":pre}
-        supabase.table("contratti").insert(d).execute()
-        st.success("Salvato!")
+    pdf.multi_cell(0, 8, clean(testo))
+    if tipo == "CONTRATTO":
+        pdf.ln(10)
+        pdf.cell(0, 10, "FIRMA CLIENTE: ________________________", ln=True)
+    
+    return pdf.output(dest="S").encode("latin-1", "ignore")
 
+# --- FORM ---
+with st.form("contratto"):
+    st.header("Nuovo Contratto / New Rental")
+    col1, col2 = st.columns(2)
+    nome = col1.text_input("Nome")
+    cognome = col1.text_input("Cognome")
+    luogo_n = col1.text_input("Luogo di Nascita")
+    indirizzo = col1.text_input("Indirizzo Residenza")
+    cf = col1.text_input("Codice Fiscale")
+    
+    tel = col2.text_input("Telefono")
+    pat = col2.text_input("Numero Patente")
+    targa = col2.text_input("Targa").upper()
+    prezzo = col2.number_input("Prezzo", min_value=0.0)
+    deposito = col2.number_input("Deposito", min_value=0.0)
+
+    st.subheader("Firma Cliente")
+    canvas = st_canvas(stroke_width=3, height=150, width=400, key="firma")
+    privacy = st.checkbox("Accetto Privacy GDPR e Clausole Multe")
+
+    if st.form_submit_button("SALVA CONTRATTO"):
+        if not privacy or not nome or not targa:
+            st.error("Dati mancanti o privacy non accettata")
+        else:
+            numero = prossimo_numero()
+            dati = {
+                "numero_fattura": numero, "nome": nome, "cognome": cognome,
+                "luogo_nascita": luogo_n, "indirizzo": indirizzo,
+                "telefono": tel, "codice_fiscale": cf, "numero_patente": pat,
+                "targa": targa, "prezzo": prezzo, "deposito": deposito, "privacy": True
+            }
+            supabase.table("contratti").insert(dati).execute()
+            st.success(f"Salvato! Fattura n. {numero}")
+
+# --- ARCHIVIO ---
 st.divider()
+st.header("Archivio Contratti")
 res = supabase.table("contratti").select("*").order("id", desc=True).execute()
+
 for c in res.data:
-    with st.expander(f"📄 {c.get('nome','')} - {c.get('targa','')}"):
-        b1, b2, b3 = st.columns(3)
-        b1.download_button("📜 CONTRATTO", genera_pdf(c, "CONTRATTO"), f"C_{c['id']}.pdf", key=f"c_{c['id']}")
-        b2.download_button("💰 RICEVUTA", genera_pdf(c, "RICEVUTA"), f"R_{c['id']}.pdf", key=f"r_{c['id']}")
-        b3.download_button("🚨 MODULO MULTE", genera_pdf(c, "MULTE"), f"M_{c['id']}.pdf", key=f"m_{c['id']}")
+    with st.expander(f"{c['numero_fattura']} - {c['nome']} {c['cognome']} - {c['targa']}"):
+        col1, col2, col3 = st.columns(3)
+        col1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"Contratto_{c['id']}.pdf", "application/pdf")
+        col2.download_button("💰 Fattura", genera_pdf_tipo(c, "FATTURA"), f"Fattura_{c['id']}.pdf", "application/pdf")
+        col3.download_button("🚨 Modulo Multe", genera_pdf_tipo(c, "MULTE"), f"Multe_{c['targa']}.pdf", "application/pdf")
