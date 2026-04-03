@@ -72,27 +72,21 @@ def genera_pdf_tipo(c, tipo="CONTRATTO"):
 # --- FORM ---
 with st.form("contratto"):
     st.header("Nuovo Contratto / New Rental")
-    col1, col2 = st.columns(2)
-   with col1:
-        nome = st.text_input("Nome")
-        cognome = st.text_input("Cognome")
-        luogo_n = st.text_input("Luogo di Nascita")
-        indirizzo = st.text_input("Indirizzo Residenza")
-        data_n = st.date_input("Data di Nascita", value=None)
-        cf = st.text_input("Codice Fiscale")
-    tel = col2.text_input("Telefono")
-    pat = col2.text_input("Numero Patente")
-    targa = col2.text_input("Targa").upper()
-    prezzo = col2.number_input("Prezzo", min_value=0.0)
-    deposito = col2.number_input("Deposito", min_value=0.0)
-
-    st.subheader("Firma Cliente")
-    canvas = st_canvas(stroke_width=3, height=150, width=400, key="firma")
-    privacy = st.checkbox("Accetto Privacy GDPR e Clausole Multe")
-
-    if st.form_submit_button("SALVA CONTRATTO"):
-        if not privacy or not nome or not targa:
-            st.error("Dati mancanti o privacy non accettata")
+  # Sezione Inserimento Dati Cliente
+    st.subheader("Dati Cliente")
+    nome = st.text_input("Nome")
+    cognome = st.text_input("Cognome")
+    indirizzo = st.text_input("Indirizzo Residenza")
+    luogo_n = st.text_input("Luogo di Nascita")
+    data_n = st.date_input("Data di Nascita", value=None)
+    tel = st.text_input("Telefono")
+    cf = st.text_input("Codice Fiscale")
+    pat = st.text_input("Numero Patente")
+    
+    st.subheader("Dati Veicolo e Noleggio")
+    targa = st.text_input("Targa Veicolo")
+    prezzo = st.number_input("Prezzo Noleggio (€)", min_value=0.0, step=10.0)
+    deposito = st.number_input("Deposito Cauzionale (€)", min_value=0.0, step=50.0)
         else:
             numero = prossimo_numero()
  # --- SALVATAGGIO DATI ---
