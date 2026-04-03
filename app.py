@@ -34,39 +34,89 @@ def prossimo_numero():
 def genera_pdf_tipo(c, tipo="CONTRATTO"):
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", "B", 14)
-    pdf.multi_cell(0, 7, clean(INTESTAZIONE))
-    pdf.ln(5)
     
+    # --- INTESTAZIONE ---
+    try:
+        # Se carichi un file chiamato logo.png su GitHub apparirà qui
+        pdf.image("logo.png", 10, 8, 33) 
+    except:
+        pdf.set_font("Arial", "B", 20)
+        pdf.cell(0, 10, "BATTAGLIA RENT", ln=True, align="C")
+        pdf.set_font("Arial", "I", 10)
+        pdf.cell(0, 10, "Noleggio Veicoli - Ischia", ln=True, align="C")
+    
+    pdf.ln(15)
     pdf.set_font("Arial", "B", 12)
-    titolo = "MODULO DATI CONDUCENTE (PER MULTE)" if tipo == "MULTE" else f"{tipo} DI NOLEGGIO"
-    pdf.cell(0, 10, clean(titolo), ln=True, align="C", border="B")
+    
+    # --- TITOLO DEL DOCUMENTO ---
+    titoli = {
+        "CONTRATTO": "CONTRATTO DI NOLEGGIO", 
+        "FATTURA": "RICEVUTA DI PAGAMENTO", 
+        "MULTE": "COMUNICAZIONE DATI CONDUCENTE (VERBALI)"
+    }
+    pdf.cell(0, 10, titoli.get(tipo, "DOCUMENTO"), ln=True, align="C")
+    pdf.ln(5)
+    
+    # --- DATI ANAGRAFICI ---
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(0, 10, "DATI DEL CONDUCENTE:", ln=True)
+    pdf.set_font("Arial", "", 10)
+    
+    dati_cliente = (
+        f"Nome e Cognome: {c.get('nome', '')} {c.get('cognome', '')}\n"
+        f"Nato a: {c.get('luogo_nascita', '________')} il {c.get('data_nascita', '________')}\n"
+        f"Residenza: {c.get('indirizzo', '________')}\n"
+        f"Codice Fiscale: {c.get('codice_fiscale', '________')}\n"
+        f"Patente n.: {c.get('numero_patente', '________')}\n"
+        f"Veicolo Targa: {c.get('targa', '________')}"
+    )
+    pdf.multi_cell(0, 6, dati_cliente)
     pdf.ln(5)
 
-    pdf.set_font("Arial", size=11)
-    if tipo == "MULTE":
-        testo = f"Il veicolo targa {c['targa']} in data {str(c.get('data_contratto',''))[:10]} era affidato a:\n\n" \
-                f"CLIENTE: {c['nome']} {c['cognome']}\n" \
-                f"NATO A: {c.get('luogo_nascita','')}\n" \
-                f"RESIDENTE IN: {c.get('indirizzo','')}\n" \
-                f"C.F.: {c['codice_fiscale']}\n" \
-                f"PATENTE: {c['numero_patente']}\n\n" \
-                f"Si rilascia per accertamento violazione."
-    else:
-        testo = f"CLIENTE: {c['nome']} {c['cognome']}\n" \
-                f"RESIDENTE: {c.get('indirizzo','')}\n" \
-                f"C.F.: {c['codice_fiscale']}\n" \
-                f"TARGA: {c['targa']} | PATENTE: {c['numero_patente']}\n" \
-                f"PREZZO: Euro {c['prezzo']}\n"
-        if tipo == "CONTRATTO":
-            testo += "\n\nCLAUSOLE: Il cliente e responsabile per danni e MULTE.\n" \
-                     "Privacy: Dati trattati secondo Reg. UE 2016/679 (GDPR)."
-
-    pdf.multi_cell(0, 8, clean(testo))
+    # --- CONTENUTO SPECIFICO ---
     if tipo == "CONTRATTO":
-        pdf.ln(10)
-        pdf.cell(0, 10, "FIRMA CLIENTE: ________________________", ln=True)
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 8, "CONDIZIONI GENERALI E CLAUSOLE:", ln=True)
+        pdf.set_font("Arial", "", 8)
+        clausole = (
+            "1. Il locatario dichiara di ricevere il veicolo in ottimo stato di manutenzione.\n"
+            "2. È vietato il trasporto di persone o merci a fini commerciali.\n"
+            "3. Il cliente è responsabile per eventuali danni, furti o contravvenzioni stradali.\n"
+            "4. Il veicolo deve essere riconsegnato entro l'orario stabilito; il ritardo comporta penali.\n"
+            "5. Carburante: il veicolo va riconsegnato con lo stesso livello di uscita."
+        )
+        pdf.multi_cell(0, 4, clausole)
+        pdf.ln(5)
+        
+        pdf.set_font("Arial", "B", 9)
+        pdf.cell(0, 8, "INFORMATIVA SULLA PRIVACY (GDPR):", ln=True)
+        pdf.set_font("Arial", "", 7)
+        privacy = "I dati personali raccolti sono trattati per l'esecuzione del contratto di noleggio e per gli adempimenti di legge (Art. 13 Reg. UE 2016/679). Il titolare del trattamento è Battaglia Rent."
+        pdf.multi_cell(0, 4, privacy)
+
+    elif tipo == "FATTURA":
+        pdf.ln(5)
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 10, f"IMPORTO NOLEGGIO: Euro {c.get('prezzo', '0.00')}", ln=True)
+        pdf.cell(0, 10, f"DEPOSITO CAUZIONALE: Euro {c.get('deposito', '0.00')}", ln=True)
+        pdf.ln(5)
+        pdf.set_font("Arial", "", 10)
+        pdf.cell(0, 10, "Pagamento ricevuto. Documento valido come ricevuta fiscale.", ln=True)
+
+    elif tipo == "MULTE":
+        pdf.ln(5)
+        pdf.multi_cell(0, 6, "In relazione alla violazione del Codice della Strada accertata, si comunica che il veicolo era affidato al conducente sopra indicato, che ne assume ogni responsabilità legale.")
+
+    # --- SPAZIO PER LA FIRMA ---
+    pdf.ln(15)
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(100, 10, "Firma del Titolare (Battaglia Rent)", 0, 0)
+    pdf.cell(0, 10, "Firma del Cliente", 0, 1, "R")
+    pdf.ln(5)
+    pdf.cell(100, 10, "________________________", 0, 0)
+    pdf.cell(0, 10, "________________________", 0, 1, "R")
     
+    return bytes(pdf.output())
 # --- INSERIMENTO DATI ---
     st.subheader("Dati Cliente e Veicolo")
     nome = st.text_input("Nome")
