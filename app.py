@@ -73,12 +73,13 @@ def genera_pdf_tipo(c, tipo="CONTRATTO"):
 with st.form("contratto"):
     st.header("Nuovo Contratto / New Rental")
     col1, col2 = st.columns(2)
-    nome = col1.text_input("Nome")
-    cognome = col1.text_input("Cognome")
-   luogo_n = col1.text_input("Luogo di Nascita")
-indirizzo = col1.text_input("Indirizzo Residenza")
-data_n = col1.date_input("Data di Nascita", value=None) # <-- AGGIUNGI QUESTA QUI
-cf = col1.text_input("Codice Fiscale")
+   with col1:
+        nome = st.text_input("Nome")
+        cognome = st.text_input("Cognome")
+        luogo_n = st.text_input("Luogo di Nascita")
+        indirizzo = st.text_input("Indirizzo Residenza")
+        data_n = st.date_input("Data di Nascita", value=None)
+        cf = st.text_input("Codice Fiscale")
     tel = col2.text_input("Telefono")
     pat = col2.text_input("Numero Patente")
     targa = col2.text_input("Targa").upper()
