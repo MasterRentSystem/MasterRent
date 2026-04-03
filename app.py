@@ -94,11 +94,25 @@ with st.form("contratto"):
             st.error("Dati mancanti o privacy non accettata")
         else:
             numero = prossimo_numero()
+           # Salvataggio con i nomi ESATTI del tuo database
             dati = {
-                "numero_fattura": numero, "nome": nome, "cognome": cognome,
-                "luogo_nascita": luogo_n, "indirizzo": indirizzo,
-                "telefono": tel, "codice_fiscale": cf, "numero_patente": pat,
-                "targa": targa, "prezzo": prezzo, "deposito": deposito, "privacy": True
+                "nome": nome,
+                "cognome": cognome,
+                "telefono": tel,
+                "numero_patente": pat,
+                "targa": targa,
+                "prezzo": prezzo,
+                "indirizzo": indirizzo,
+                "luogo_nascita": luogo_n,
+                "data_nascita": str(data_n),
+                "privacy_accettata": True  # Nome corretto come da tua lista
+            }
+            
+            try:
+                supabase.table("contratti").insert(dati).execute()
+                st.success(f"✅ Contratto di {nome} salvato! Ora trovi i 3 TASTI nell'archivio.")
+            except Exception as e:
+                st.error(f"Errore database: {e}")
             }
             supabase.table("contratti").insert(dati).execute()
             st.success(f"Salvato! Fattura n. {numero}")
