@@ -214,8 +214,7 @@ def genera_pdf_tipo(c, tipo="CONTRATTO"):
         align="R"
     )
 
-    return pdf.output(dest="S").encode("latin-1")
-
+  return bytes(pdf.output())
 # -------------------------
 # LOGIN
 # -------------------------
