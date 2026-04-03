@@ -43,7 +43,7 @@ def genera_pdf_tipo(c, tipo="CONTRATTO"):
     pdf = FPDF()
     pdf.add_page()
     
-    # 1. INTESTAZIONE AZIENDALE (Sempre presente)
+    # 1. INTESTAZIONE AZIENDALE FISSA (In alto a sinistra)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 6, safe_text(DITTA), ln=True)
     pdf.set_font("Arial", "", 9)
@@ -51,73 +51,99 @@ def genera_pdf_tipo(c, tipo="CONTRATTO"):
     pdf.cell(0, 5, safe_text(DATI_IVA), ln=True)
     pdf.ln(10)
 
-    # 2. TITOLO DOCUMENTO DISTINTO
+    # 2. TITOLO DEL DOCUMENTO
     titoli = {
         "CONTRATTO": "CONTRATTO DI NOLEGGIO / RENTAL AGREEMENT",
         "FATTURA": "RICEVUTA DI PAGAMENTO / PAYMENT RECEIPT",
-        "MULTE": "MODULO DICHIARAZIONE CONDUCENTE (PER AUTORITA)"
+        "MULTE": "COMUNICAZIONE LOCAZIONE VEICOLO (D.P.R. 445/2000)"
     }
     pdf.set_font("Arial", "B", 15)
     pdf.cell(0, 10, safe_text(titoli.get(tipo, "")), ln=True, align="C", border="B")
     pdf.ln(8)
 
-    # 3. DATI NOLEGGIO
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(0, 7, "DETTAGLI DEL SERVIZIO:", ln=True)
-    pdf.set_font("Arial", "", 10)
-    testo_base = (
-        f"Ricevuta N: {c.get('numero_fattura')} | Targa: {c.get('targa')}\n"
-        f"Cliente: {c.get('nome')} {c.get('cognome')}\n"
-        f"Codice Fiscale: {c.get('codice_fiscale')} | Patente: {c.get('numero_patente')}\n"
-        f"Periodo: dal {c.get('inizio')} al {c.get('fine')}"
-    )
-    pdf.multi_cell(0, 6, safe_text(testo_base))
-    pdf.ln(5)
-
-    # 4. CONTENUTO SPECIFICO
+    # 3. LOGICA SPECIFICA PER OGNI DOCUMENTO
     if tipo == "CONTRATTO":
+        # --- SEZIONE CONTRATTO ---
         pdf.set_font("Arial", "B", 10)
-        pdf.cell(0, 7, "CONDIZIONI GENERALI DI NOLEGGIO:", ln=True)
-        pdf.set_font("Arial", "", 8)
+        pdf.cell(0, 7, "DATI DEL NOLEGGIO:", ln=True)
+        pdf.set_font("Arial", "", 10)
+        testo_noleggio = (
+            f"Cliente: {c.get('nome')} {c.get('cognome')}\n"
+            f"Nato a: {c.get('luogo_nascita', '________')} il {c.get('data_nascita', '________')}\n"
+            f"Codice Fiscale: {c.get('codice_fiscale')}\n"
+            f"Patente n.: {c.get('numero_patente')}\n"
+            f"Veicolo Targa: {c.get('targa')}\n"
+            f"Periodo: dal {c.get('inizio')} al {c.get('fine')}"
+        )
+        pdf.multi_cell(0, 6, safe_text(testo_noleggio))
+        pdf.ln(5)
+        
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 7, "CONDIZIONI GENERALI (CLAUSOLE):", ln=True)
+        pdf.set_font("Arial", "", 9)
         clausole = (
-            "1. RESPONSABILITA: Il cliente e interamente responsabile per danni, furto o incendio.\n"
-            "2. MULTE: Le violazioni al Codice della Strada sono a totale carico del firmatario.\n"
-            "3. CARBURANTE: Il veicolo deve essere riconsegnato con lo stesso livello iniziale.\n"
+            "1. RESPONSABILITA: Il cliente e responsabile per ogni danno, furto o incendio.\n"
+            "2. MULTE: Le sanzioni amministrative sono a totale carico del conducente.\n"
+            "3. CARBURANTE: Il veicolo va riconsegnato con lo stesso livello iniziale.\n"
             "4. DEPOSITO: La cauzione versata e di Euro " + str(c.get('deposito', 0)) + ".\n"
-            "5. PRIVACY: Trattamento dati ai sensi del Reg. UE 2016/679 (GDPR)."
+            "5. PRIVACY: I dati sono trattati secondo il Reg. UE 2016/679 (GDPR)."
         )
         pdf.multi_cell(0, 5, safe_text(clausole))
 
     elif tipo == "FATTURA":
-        pdf.ln(5)
-        pdf.set_font("Arial", "B", 14)
-        pdf.cell(0, 12, f"TOTALE PAGATO: EUR {c.get('prezzo')}", ln=True, border=1, align="C")
+        # --- SEZIONE FATTURA ---
         pdf.set_font("Arial", "", 10)
-        pdf.cell(0, 10, "Pagamento ricevuto a mezzo contanti/carta. Documento valido ai fini fiscali.", ln=True)
-
-    elif tipo == "MULTE":
+        pdf.cell(0, 7, f"Ricevuta n. {c.get('numero_fattura')} del {c.get('inizio')}", ln=True)
         pdf.ln(5)
         pdf.set_font("Arial", "B", 10)
-        testo_multe = (
-            "Il sottoscritto dichiara, sotto la propria responsabilita civile e penale, di essere stato "
-            "alla guida del veicolo sopra indicato nel periodo segnalato e di assumersi la piena "
-            "responsabilita per eventuali infrazioni rilevate dagli organi di Polizia."
-        )
-        pdf.multi_cell(0, 6, safe_text(testo_multe))
+        pdf.cell(0, 7, "DETTAGLIO PAGAMENTO:", ln=True)
+        pdf.set_font("Arial", "", 10)
+        pdf.cell(0, 7, f"Cliente: {c.get('nome')} {c.get('cognome')}", ln=True)
+        pdf.cell(0, 7, f"Per noleggio veicolo targa: {c.get('targa')}", ln=True)
+        pdf.ln(10)
+        pdf.set_font("Arial", "B", 14)
+        pdf.cell(0, 15, f"TOTALE INCASSATO: EUR {c.get('prezzo')}", ln=True, border=1, align="C")
 
-    # 5. FIRMA CLIENTE
+    elif tipo == "MULTE":
+        # --- SEZIONE MULTE (COPIATA DALLA TUA FOTO) ---
+        pdf.set_font("Arial", "", 10)
+        pdf.cell(0, 5, "Spett. le", ln=True, align="R")
+        pdf.cell(0, 5, "Polizia Locale di ____________________", ln=True, align="R")
+        pdf.ln(5)
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 5, "OGGETTO: RIFERIMENTO VS. ACCERTAMENTO VIOLAZIONE N. _____________", ln=True)
+        pdf.cell(0, 5, "         - COMUNICAZIONE LOCAZIONE VEICOLO", ln=True)
+        pdf.ln(5)
+        pdf.set_font("Arial", "", 10)
+        testo_multe = (
+            f"In riferimento al Verbale in oggetto, la sottoscritta BATTAGLIA MARIANNA, nata a Berlino "
+            f"il 13/01/1987 e residente in Forio alla Via Cognole n. 5, titolare dell'omonima ditta, "
+            f"C.F. BTTMNN87A53Z112S e P.IVA 10252601215, ai sensi del D.P.R. 445/2000 DICHIARA che il veicolo "
+            f"targato {c.get('targa')} in data {c.get('inizio')} era concesso in locazione al signor:\n\n"
+            f"COGNOME E NOME: {c.get('nome').upper()} {c.get('cognome').upper()}\n"
+            f"NATO A: {c.get('luogo_nascita', '________')} IL {c.get('data_nascita', '________')}\n"
+            f"RESIDENTE IN: {c.get('indirizzo', '__________________')}\n"
+            f"PATENTE N.: {c.get('numero_patente')}\n\n"
+            f"Si allega copia del contratto e documento. Il sottoscritto dichiara che la copia allegata "
+            f"e conforme all'originale agli atti della ditta."
+        )
+        pdf.multi_cell(0, 5, safe_text(testo_multe))
+        pdf.ln(10)
+        pdf.cell(0, 5, "In fede, Marianna Battaglia", ln=True, align="R")
+
+    # --- 4. SPAZIO FIRMA CLIENTE (Sempre in fondo a destra) ---
     if c.get("firma"):
         try:
             pdf.ln(5)
             img_data = base64.b64decode(c["firma"])
-            y_pos = pdf.get_y()
-            if y_pos > 230: pdf.add_page(); y_pos = 20
-            pdf.image(io.BytesIO(img_data), x=130, y=y_pos, w=50)
+            y_firma = pdf.get_y()
+            if y_firma > 230: pdf.add_page(); y_firma = 20
+            pdf.image(io.BytesIO(img_data), x=130, y=y_firma, w=50)
+            pdf.set_y(y_firma + 25)
         except: pass
 
-    pdf.ln(25)
     pdf.set_font("Arial", "B", 10)
-    pdf.cell(0, 10, "Firma del Cliente per Accettazione", ln=True, align="R")
+    pdf.cell(0, 10, "Firma del Cliente (Noleggiante)", ln=True, align="R")
     
     return bytes(pdf.output())
 
