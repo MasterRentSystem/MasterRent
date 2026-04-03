@@ -67,13 +67,8 @@ def genera_pdf_tipo(c, tipo="CONTRATTO"):
         pdf.ln(10)
         pdf.cell(0, 10, "FIRMA CLIENTE: ________________________", ln=True)
     
-    return bytes(pdf.output())
-
-# --- FORM ---
-with st.form("contratto"):
-    st.header("Nuovo Contratto / New Rental")
-  # Sezione Inserimento Dati Cliente
-    st.subheader("Dati Cliente")
+# --- INSERIMENTO DATI ---
+    st.subheader("Dati Cliente e Veicolo")
     nome = st.text_input("Nome")
     cognome = st.text_input("Cognome")
     indirizzo = st.text_input("Indirizzo Residenza")
@@ -82,46 +77,46 @@ with st.form("contratto"):
     tel = st.text_input("Telefono")
     cf = st.text_input("Codice Fiscale")
     pat = st.text_input("Numero Patente")
-    
-    st.subheader("Dati Veicolo e Noleggio")
     targa = st.text_input("Targa Veicolo")
-    prezzo = st.number_input("Prezzo Noleggio (€)", min_value=0.0, step=10.0)
-    deposito = st.number_input("Deposito Cauzionale (€)", min_value=0.0, step=50.0)
-        else:
-            numero = prossimo_numero()
- # --- SALVATAGGIO DATI ---
-            try:
-                dati = {
-                    "nome": nome,
-                    "cognome": cognome,
-                    "telefono": tel,
-                    "numero_patente": pat,
-                    "targa": targa,
-                    "prezzo": prezzo,
-                    "indirizzo": indirizzo,
-                    "luogo_nascita": luogo_n,
-                    "data_nascita": str(data_n),
-                    "privacy_accettata": True
-                }
-                supabase.table("contratti").insert(dati).execute()
-                st.success(f"✅ Contratto di {nome} salvato con successo!")
-            except Exception as e:
-                st.error(f"Errore database: {e}")
+    prezzo = st.number_input("Prezzo Noleggio (€)", min_value=0.0)
+    deposito = st.number_input("Deposito Cauzionale (€)", min_value=0.0)
+
+    # --- TASTO SALVA ---
+    if st.button("💾 Salva Contratto e Genera Documenti"):
+        try:
+            dati = {
+                "nome": nome,
+                "cognome": cognome,
+                "telefono": tel,
+                "numero_patente": pat,
+                "targa": targa,
+                "prezzo": prezzo,
+                "indirizzo": indirizzo,
+                "luogo_nascita": luogo_n,
+                "data_nascita": str(data_n) if data_n else None,
+                "privacy_accettata": True
+            }
+            supabase.table("contratti").insert(dati).execute()
+            st.success(f"✅ Contratto di {nome} salvato!")
+            st.rerun() # Ricarica l'app per mostrare il nuovo contratto nell'archivio
+        except Exception as e:
+            st.error(f"Errore database: {e}")
 
 # --- ARCHIVIO ---
 st.divider()
-st.header("Archivio Contratti")
-res = supabase.table("contratti").select("*").order("id", desc=True).execute()
-
-for c in res.data:
-    num_f = c.get('id', '0')
-    nome_c = c.get('nome', 'Sconosciuto')
-    cognome_c = c.get('cognome', '')
-    targa_c = c.get('targa', 'No Targa')
-
-    with st.expander(f"ID: {num_f} - {nome_c} {cognome_c} - {targa_c}"):
-        col1, col2, col3 = st.columns(3)
-        # Generazione PDF con i 3 tasti
-        col1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"C_{num_f}.pdf")
-        col2.download_button("💰 Fattura", genera_pdf_tipo(c, "FATTURA"), f"F_{num_f}.pdf")
-        col3.download_button("🚨 Modulo Multe", genera_pdf_tipo(c, "MULTE"), f"M_{targa_c}.pdf")
+st.header("📋 Archivio Contratti")
+try:
+    res = supabase.table("contratti").select("*").order("id", desc=True).execute()
+    for c in res.data:
+        id_c = c.get('id', '0')
+        n = c.get('nome', '')
+        cog = c.get('cognome', '')
+        t = c.get('targa', '')
+        
+        with st.expander(f"ID: {id_c} - {n} {cog} ({t})"):
+            col1, col2, col3 = st.columns(3)
+            col1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"C_{id_c}.pdf")
+            col2.download_button("💰 Fattura", genera_pdf_tipo(c, "FATTURA"), f"F_{id_c}.pdf")
+            col3.download_button("🚨 Modulo Multe", genera_pdf_tipo(c, "MULTE"), f"M_{t}.pdf")
+except Exception as e:
+    st.info("Inizia a inserire il primo contratto per vedere l'archivio!")
