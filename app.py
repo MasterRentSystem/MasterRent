@@ -207,18 +207,19 @@ def genera_pdf_tipo(c, tipo="CONTRATTO"):
     pdf.set_font("Arial", "B", 10)
 
     pdf.cell(
+  pdf.cell(
         0,
         10,
-        "Firma Cliente / Customer Signature: _____________________",
+        "Firma Cliente / Customer Signature: ___________________",
         ln=True,
         align="R"
     )
 
-  return bytes(pdf.output())
+    return bytes(pdf.output())
+
 # -------------------------
 # LOGIN
 # -------------------------
-
 if "autenticato" not in st.session_state:
     st.session_state.autenticato = False
 
