@@ -109,14 +109,12 @@ st.header("Archivio Contratti")
 res = supabase.table("contratti").select("*").order("id", desc=True).execute()
 
 for c in res.data:
-    # Versione sicura che non crasha se mancano i dati
-num_f = c.get('numero_fattura', 'N/D')
-nome_c = c.get('nome', 'Sconosciuto')
-cognome_c = c.get('cognome', '')
-targa_c = c.get('targa', 'No Targa')
-
-with st.expander(f"{num_f} - {nome_c} {cognome_c} - {targa_c}"):
+    num_f = c.get('numero_fattura', 'N/D')
+    nome_c = c.get('nome', 'Sconosciuto')
+    cognome_c = c.get('cognome', '')
+    targa_c = c.get('targa', 'No Targa')
+    with st.expander(f"{num_f} - {nome_c} {cognome_c} - {targa_c}"):
         col1, col2, col3 = st.columns(3)
-        col1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"Contratto_{c['id']}.pdf", "application/pdf")
-        col2.download_button("💰 Fattura", genera_pdf_tipo(c, "FATTURA"), f"Fattura_{c['id']}.pdf", "application/pdf")
-        col3.download_button("🚨 Modulo Multe", genera_pdf_tipo(c, "MULTE"), f"Multe_{c['targa']}.pdf", "application/pdf")
+        col1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"C_{c.get('id','0')}.pdf")
+        col2.download_button("💰 Fattura", genera_pdf_tipo(c, "FATTURA"), f"F_{c.get('id','0')}.pdf")
+        col3.download_button("🚨 Modulo Multe", genera_pdf_tipo(c, "MULTE"), f"M_{targa_c}.pdf")
