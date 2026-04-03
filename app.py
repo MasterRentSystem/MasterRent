@@ -75,10 +75,10 @@ with st.form("contratto"):
     col1, col2 = st.columns(2)
     nome = col1.text_input("Nome")
     cognome = col1.text_input("Cognome")
-    luogo_n = col1.text_input("Luogo di Nascita")
-    indirizzo = col1.text_input("Indirizzo Residenza")
-    cf = col1.text_input("Codice Fiscale")
-    
+   luogo_n = col1.text_input("Luogo di Nascita")
+indirizzo = col1.text_input("Indirizzo Residenza")
+data_n = col1.date_input("Data di Nascita", value=None) # <-- AGGIUNGI QUESTA QUI
+cf = col1.text_input("Codice Fiscale")
     tel = col2.text_input("Telefono")
     pat = col2.text_input("Numero Patente")
     targa = col2.text_input("Targa").upper()
