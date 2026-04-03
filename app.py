@@ -48,12 +48,14 @@ def genera_pdf_tipo(c, tipo="CONTRATTO", firma_data=None):
              f"Prezzo: {c.get('prezzo')} Euro - Deposito: {c.get('deposito')} Euro")
     pdf.multi_cell(0, 6, testo)
     
-    if tipo == "CONTRATTO":
-        pdf.ln(5)
-        pdf.set_font("Arial", "B", 10)
-        pdf.cell(0, 8, "CONDIZIONI E PRIVACY:", ln=True)
-        pdf.set_font("Arial", "", 8)
-        pdf.multi_cell(0, 4, "Il cliente accetta la piena responsabilita per danni, furti e multe. I dati sono trattati secondo il GDPR (UE 2016/679).")
+    pdf.ln(5)
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(0, 8, "CONDIZIONI E PRIVACY:", ln=True)
+    pdf.set_font("Arial", "", 8)
+    clausole_pdf = ("1. Il cliente e responsabile di danni, furti e multe.\n"
+                    "2. Riconsegna con stesso livello di carburante.\n"
+                    "3. I dati sono trattati secondo il GDPR (UE 2016/679).")
+    pdf.multi_cell(0, 4, clausole_pdf)
 
     # Firma nel PDF
     if firma_data is not None:
@@ -98,13 +100,36 @@ else:
         prezzo = st.number_input("Prezzo (€)", min_value=0.0)
         deposito = st.number_input("Deposito (€)", min_value=0.0)
 
-    # FIRMA
+    # --- FOTO DOCUMENTI ---
+    st.subheader("📸 Foto Documento d'Identità")
+    c1, c2 = st.columns(2)
+    with c1:
+        f_fronte = st.file_uploader("Fronte Documento", type=['png', 'jpg', 'jpeg'])
+    with c2:
+        f_retro = st.file_uploader("Retro Documento", type=['png', 'jpg', 'jpeg'])
+
+    # --- CLAUSOLE DA LEGGERE PRIMA DI FIRMARE ---
+    st.divider()
+    st.subheader("⚖️ Termini, Condizioni e Privacy")
+    st.info("""
+    *CONTRATTO DI NOLEGGIO - BATTAGLIA RENT*
+    
+    1. *Responsabilità:* Il cliente dichiara di ricevere il veicolo in ottimo stato. È responsabile di ogni danno causato al veicolo, a sé stesso o a terzi durante il periodo di noleggio.
+    2. *Multe e Infrazioni:* Ogni contravvenzione al Codice della Strada è a totale carico del locatario.
+    3. *Carburante:* Il veicolo deve essere riconsegnato con lo stesso livello di carburante presente alla consegna.
+    4. *Furto:* In caso di furto, il cliente è tenuto a sporgere denuncia immediata e a risarcire il valore del veicolo se non diversamente concordato.
+    
+    *INFORMATIVA PRIVACY (GDPR):*
+    Ai sensi del Reg. UE 2016/679, i dati personali qui raccolti verranno utilizzati esclusivamente per la gestione del contratto di noleggio e per adempimenti di legge. Non verranno ceduti a terzi per scopi pubblicitari.
+    """)
+    
+    accetto = st.checkbox("CONFERMO DI AVER LETTO E ACCETTO TUTTE LE CLAUSOLE SOPRA RIPORTATE")
+
+    # --- FIRMA DIGITALE ---
     st.subheader("✍️ Firma del Cliente")
     canvas = st_canvas(stroke_width=3, stroke_color="#000", background_color="#eee", height=150, width=400, drawing_mode="freedraw", key="canvas")
 
-    accetto = st.checkbox("Il cliente accetta i Termini e la Privacy GDPR")
-
-    if st.button("💾 SALVA E GENERA"):
+    if st.button("💾 SALVA CONTRATTO"):
         if accetto and nome and targa:
             try:
                 dati = {
@@ -115,20 +140,20 @@ else:
                     "privacy_accettata": True
                 }
                 supabase.table("contratti").insert(dati).execute()
-                st.success("✅ Contratto salvato!")
+                st.success("✅ Contratto salvato con successo!")
                 st.rerun()
             except Exception as e:
                 st.error(f"Errore: {e}")
         else:
-            st.warning("⚠️ Compila i dati obbligatori e fai firmare!")
+            st.error("⚠️ Attenzione! Devi accettare le clausole (spunta la casella) e inserire i dati prima di salvare.")
 
     # ARCHIVIO
     st.divider()
-    st.header("📋 Archivio")
+    st.header("📋 Archivio Contratti")
     try:
         res = supabase.table("contratti").select("*").order("id", desc=True).execute()
         for c in res.data:
-            with st.expander(f"Contratto {c['id']} - {c['nome']} {c['cognome']} ({c['targa']})"):
+            with st.expander(f"ID: {c['id']} - {c['nome']} {c['cognome']} ({c['targa']})"):
                 col1, col2, col3 = st.columns(3)
                 col1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"C_{c['id']}.pdf")
                 col2.download_button("💰 Ricevuta", genera_pdf_tipo(c, "FATTURA"), f"R_{c['id']}.pdf")
