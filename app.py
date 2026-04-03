@@ -109,11 +109,26 @@ with st.form("contratto"):
             }
             
             try:
+               # 1. Prepariamo i dati (Senza graffe doppie fuori!)
+            dati = {
+                "nome": nome,
+                "cognome": cognome,
+                "telefono": tel,
+                "numero_patente": pat,
+                "targa": targa,
+                "prezzo": prezzo,
+                "indirizzo": indirizzo,
+                "luogo_nascita": luogo_n,
+                "data_nascita": str(data_n),
+                "privacy_accettata": True
+            }
+            
+            # 2. Salviamo (Assicurati che non ci siano altre } qui sotto)
+            try:
                 supabase.table("contratti").insert(dati).execute()
-                st.success(f"✅ Contratto di {nome} salvato! Ora trovi i 3 TASTI nell'archivio.")
+                st.success(f"✅ Salvato! Ora trovi i 3 TASTI nell'archivio.")
             except Exception as e:
                 st.error(f"Errore database: {e}")
-            }
             supabase.table("contratti").insert(dati).execute()
             st.success(f"Salvato! Fattura n. {numero}")
 
