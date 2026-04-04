@@ -220,20 +220,33 @@ else:
                 st.success(f"✅ Contratto n. {n_fatt} salvato!")
                 st.rerun()
 
-    # --- ARCHIVIO ---
+   # --- SEZIONE ARCHIVIO (Controlla che i nomi siano identici) ---
     st.divider()
     st.subheader("📋 Archivio Contratti")
     res = supabase.table("contratti").select("*").order("id", desc=True).execute()
+    
     for c in res.data:
         with st.expander(f"📄 {c['nome']} {c['cognome']} - {c['targa']} (Ricevuta {c['numero_fattura']})"):
-            c1, c2, c3 = st.columns(3)
-            c1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"Contratto_{c['id']}.pdf")
-            c2.download_button("💰 Ricevuta", genera_pdf_tipo(c, "FATTURA"), f"Ricevuta_{c['id']}.pdf")
-            c3.download_button("🚨 Modulo Multe", genera_pdf_tipo(c, "MULTE"), f"Multe_{c['id']}.pdf")
+            col_a, col_b, col_c = st.columns(3)
             
-            if c.get("url_fronte") or c.get("url_retro"):
-                st.write("---")
-                st.write("📂 *Foto Documenti per Polizia:*")
-                f1, f2 = st.columns(2)
-                if c.get("url_fronte"): f1.link_button("👁️ Vedi Fronte", c["url_fronte"])
-                if c.get("url_retro"): f2.link_button("👁️ Vedi Retro", c["url_retro"])
+            # IL SEGRETO È QUI: Il secondo pezzetto deve dire "CONTRATTO", "FATTURA" o "MULTE"
+            col_a.download_button(
+                label="📜 Scarica Contratto",
+                data=genera_pdf_tipo(c, "CONTRATTO"),
+                file_name=f"Contratto_{c['numero_fattura']}.pdf",
+                key=f"btn_con_{c['id']}"
+            )
+            
+            col_b.download_button(
+                label="💰 Scarica Ricevuta",
+                data=genera_pdf_tipo(c, "FATTURA"),
+                file_name=f"Ricevuta_{c['numero_fattura']}.pdf",
+                key=f"btn_ric_{c['id']}"
+            )
+            
+            col_c.download_button(
+                label="🚨 Modulo Multe",
+                data=genera_pdf_tipo(c, "MULTE"),
+                file_name=f"Modulo_Multe_{c['id']}.pdf",
+                key=f"btn_mul_{c['id']}"
+            )
