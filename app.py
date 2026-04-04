@@ -341,14 +341,15 @@ Data:
 
     pdf.set_font("Arial", "B", 10)
 
-    pdf.cell(
-        0,
-        10,
-        "Firma Cliente",
-        ln=True,
-        align="R"
-    )
+   pdf.cell(
+    0,
+    10,
+    "Firma Cliente",
+    ln=True,
+    align="R"
+)
 
+# FIX DEFINITIVO STREAMLIT / FPDF
 pdf_bytes = pdf.output(dest="S")
 
 if isinstance(pdf_bytes, str):
