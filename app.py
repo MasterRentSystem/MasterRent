@@ -530,6 +530,6 @@ else:
                         )
 
 
-    except Exception as e:
+   except Exception as e:
     st.error("Errore archivio:")
     st.error(e)
