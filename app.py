@@ -451,7 +451,6 @@ st.divider()
     st.subheader("📂 Archivio Contratti")
 
     try:
-
         res = (
             supabase
             .table("contratti")
@@ -460,69 +459,49 @@ st.divider()
             .execute()
         )
 
-        if not res.data:
+        for c in res.data or []:
+            with st.expander(
+                f"📄 {c['numero_fattura']} - "
+                f"{c['nome']} {c['cognome']} "
+                f"({c['targa']})"
+            ):
+                c1, c2, c3 = st.columns(3)
 
-            st.info("Nessun contratto presente.")
+                pdf_contratto = genera_pdf_tipo(c, "CONTRATTO")
+                pdf_ricevuta = genera_pdf_tipo(c, "FATTURA")
+                pdf_multe = genera_pdf_tipo(c, "MULTE")
 
-        else:
+                c1.download_button(
+                    "📜 Contratto",
+                    pdf_contratto,
+                    f"Contratto_{c['targa']}.pdf",
+                    "application/pdf",
+                    key=f"c_{c['id']}"
+                )
 
-            for c in res.data:
+                c2.download_button(
+                    "💰 Ricevuta",
+                    pdf_ricevuta,
+                    f"Ricevuta_{c['numero_fattura']}.pdf",
+                    "application/pdf",
+                    key=f"r_{c['id']}"
+                )
 
-                nome = c.get("nome") or ""
-                cognome = c.get("cognome") or ""
-                targa = c.get("targa") or ""
-                numero = c.get("numero_fattura") or "?"
+                c3.download_button(
+                    "🚨 Modulo Multe",
+                    pdf_multe,
+                    f"Multe_{c['targa']}.pdf",
+                    "application/pdf",
+                    key=f"m_{c['id']}"
+                )
 
-                with st.expander(
-                    f"📄 {numero} - {nome} {cognome} ({targa})"
-                ):
-
-                    col1, col2, col3 = st.columns(3)
-
-                    try:
-
-                        pdf_contratto = genera_pdf_tipo(
-                            c,
-                            "CONTRATTO"
-                        )
-
-                        pdf_ricevuta = genera_pdf_tipo(
-                            c,
-                            "FATTURA"
-                        )
-
-                        pdf_multe = genera_pdf_tipo(
-                            c,
-                            "MULTE"
-                        )
-
-                        col1.download_button(
-                            "📜 Contratto",
-                            pdf_contratto,
-                            f"Contratto_{targa}.pdf",
-                            "application/pdf"
-                        )
-
-                        col2.download_button(
-                            "💰 Ricevuta",
-                            pdf_ricevuta,
-                            f"Ricevuta_{numero}.pdf",
-                            "application/pdf"
-                        )
-
-                        col3.download_button(
-                            "🚨 Modulo Multe",
-                            pdf_multe,
-                            f"Multe_{targa}.pdf",
-                            "application/pdf"
-                        )
-
-                    except Exception as pdf_error:
-
-                        st.error("Errore generazione PDF:")
-                        st.error(pdf_error)
+                if c.get("url_fronte") or c.get("url_retro"):
+                    st.write("---")
+                    col_f1, col_f2 = st.columns(2)
+                    if c.get("url_fronte"):
+                        col_f1.link_button("👁️ Vedi Fronte Patente", c["url_fronte"])
+                    if c.get("url_retro"):
+                        col_f2.link_button("👁️ Vedi Retro Patente", c["url_retro"])
 
     except Exception as e:
-
-        st.error("Errore archivio:")
-        st.error(e)
+        st.info("Inizia a caricare il primo noleggio.")
