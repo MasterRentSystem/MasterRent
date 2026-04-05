@@ -269,7 +269,7 @@ else:
     st.subheader("📂 Archivio Contratti")
 
     try:
-        res = supabase.table("contracts").select("*").order("id", desc=True).execute()
+        res = supabase.table("contratti").select("*").order("id", desc=True).execute()
         
         if not res.data:
             st.info("Nessun contratto trovato.")
