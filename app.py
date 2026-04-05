@@ -102,9 +102,15 @@ def genera_pdf_tipo(c, tipo):
     pdf.set_font("Arial", "B", 10)
     pdf.cell(0, 10, "Firma Cliente", ln=True, align="R")
     
+  # Genera il PDF come stringa o bytearray
     pdf_out = pdf.output(dest="S")
-    return pdf_out.encode("latin-1") if isinstance(pdf_out, str) else pdf_out
-
+    
+    # Se è una stringa, la codifichiamo
+    if isinstance(pdf_out, str):
+        return pdf_out.encode("latin-1")
+    
+    # Se è un bytearray (l'errore che ricevi), lo trasformiamo in bytes
+    return bytes(pdf_out)
 # ------------------------------------------------
 # LOGICA APP
 # ------------------------------------------------
