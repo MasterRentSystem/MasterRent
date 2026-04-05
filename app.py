@@ -446,82 +446,84 @@ else:
 
                 st.rerun()
 
-   st.divider()
+st.divider()
 
-st.subheader("📂 Archivio Contratti")
+    st.subheader("📂 Archivio Contratti")
 
-try:
+    try:
 
-    res = (
-        supabase
-        .table("contratti")
-        .select("*")
-        .order("id", desc=True)
-        .execute()
-    )
+        res = (
+            supabase
+            .table("contratti")
+            .select("*")
+            .order("id", desc=True)
+            .execute()
+        )
 
-    if not res.data:
-        st.info("Nessun contratto presente.")
+        if not res.data:
 
-    else:
+            st.info("Nessun contratto presente.")
 
-        for c in res.data:
+        else:
 
-            nome = c.get("nome") or ""
-            cognome = c.get("cognome") or ""
-            targa = c.get("targa") or ""
-            numero = c.get("numero_fattura") or "?"
+            for c in res.data:
 
-            with st.expander(
-                f"📄 {numero} - {nome} {cognome} ({targa})"
-            ):
+                nome = c.get("nome") or ""
+                cognome = c.get("cognome") or ""
+                targa = c.get("targa") or ""
+                numero = c.get("numero_fattura") or "?"
 
-                col1, col2, col3 = st.columns(3)
+                with st.expander(
+                    f"📄 {numero} - {nome} {cognome} ({targa})"
+                ):
 
-                try:
+                    col1, col2, col3 = st.columns(3)
 
-                    pdf_contratto = genera_pdf_tipo(
-                        c,
-                        "CONTRATTO"
-                    )
+                    try:
 
-                    pdf_ricevuta = genera_pdf_tipo(
-                        c,
-                        "FATTURA"
-                    )
+                        pdf_contratto = genera_pdf_tipo(
+                            c,
+                            "CONTRATTO"
+                        )
 
-                    pdf_multe = genera_pdf_tipo(
-                        c,
-                        "MULTE"
-                    )
+                        pdf_ricevuta = genera_pdf_tipo(
+                            c,
+                            "FATTURA"
+                        )
 
-                    col1.download_button(
-                        "📜 Contratto",
-                        pdf_contratto,
-                        f"Contratto_{targa}.pdf",
-                        "application/pdf"
-                    )
+                        pdf_multe = genera_pdf_tipo(
+                            c,
+                            "MULTE"
+                        )
 
-                    col2.download_button(
-                        "💰 Ricevuta",
-                        pdf_ricevuta,
-                        f"Ricevuta_{numero}.pdf",
-                        "application/pdf"
-                    )
+                        col1.download_button(
+                            "📜 Contratto",
+                            pdf_contratto,
+                            f"Contratto_{targa}.pdf",
+                            "application/pdf"
+                        )
 
-                    col3.download_button(
-                        "🚨 Modulo Multe",
-                        pdf_multe,
-                        f"Multe_{targa}.pdf",
-                        "application/pdf"
-                    )
+                        col2.download_button(
+                            "💰 Ricevuta",
+                            pdf_ricevuta,
+                            f"Ricevuta_{numero}.pdf",
+                            "application/pdf"
+                        )
 
-                except Exception as pdf_error:
+                        col3.download_button(
+                            "🚨 Modulo Multe",
+                            pdf_multe,
+                            f"Multe_{targa}.pdf",
+                            "application/pdf"
+                        )
 
-                    st.error("Errore generazione PDF:")
-                    st.error(pdf_error)
+                    except Exception as pdf_error:
 
-except Exception as e:
+                        st.error("Errore generazione PDF:")
+                        st.error(pdf_error)
 
-    st.error("Errore archivio:")
-    st.error(e)
+    except Exception as e:
+
+        st.error("Errore archivio:")
+        st.error(e)
+        
