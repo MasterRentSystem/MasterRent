@@ -269,22 +269,33 @@ else:
     st.subheader("📂 Archivio Contratti")
 
     try:
-        res = supabase.table("contratti").select("*").order("id", desc=True).execute()
-        for c in res.data or []:
-            with st.expander(f"📄 {c['numero_fattura']} - {c['nome']} {c['cognome']} ({c['targa']})"):
-                c1, c2, c3 = st.columns(3)
-                pdf_contratto = genera_pdf_tipo(c, "CONTRATTO")
-                pdf_ricevuta = genera_pdf_tipo(c, "FATTURA")
-                pdf_multe = genera_pdf_tipo(c, "MULTE")
+        res = supabase.table("contracts").select("*").order("id", desc=True).execute()
+        
+        if not res.data:
+            st.info("Nessun contratto trovato.")
+        else:
+            for c in res.data:
+                # Usiamo l'ID del database per rendere ogni espansore unico
+                unique_key = f"{c['id']}_{c['targa']}"
+                
+                with st.expander(f"📄 Ricevuta {c.get('numero_fattura', 'N/A')} - {c.get('nome', '')} {c.get('cognome', '')} ({c.get('targa', '')})"):
+                    c1, c2, c3 = st.columns(3)
 
-                c1.download_button("📜 Contratto", pdf_contratto, f"Contratto_{c['targa']}.pdf", "application/pdf", key=f"c_{c['id']}")
-                c2.download_button("💰 Ricevuta", pdf_ricevuta, f"Ricevuta_{c['numero_fattura']}.pdf", "application/pdf", key=f"r_{c['id']}")
-                c3.download_button("🚨 Modulo Multe", pdf_multe, f"Multe_{c['targa']}.pdf", "application/pdf", key=f"m_{c['id']}")
+                    # Generiamo i PDF passando i dati correnti
+                    pdf_c = genera_pdf_tipo(c, "CONTRATTO")
+                    pdf_f = genera_pdf_tipo(c, "FATTURA")
+                    pdf_m = genera_pdf_tipo(c, "MULTE")
 
-                if c.get("url_fronte") or c.get("url_retro"):
-                    st.write("---")
-                    cf1, cf2 = st.columns(2)
-                    if c.get("url_fronte"): cf1.link_button("👁️ Vedi Fronte", c["url_fronte"])
-                    if c.get("url_retro"): cf2.link_button("👁️ Vedi Retro", c["url_retro"])
-    except:
-        st.info("Inizia a caricare il primo noleggio.")
+                    c1.download_button("📜 Contratto", pdf_c, f"Contratto_{unique_key}.pdf", "application/pdf", key=f"btn_c_{unique_key}")
+                    c2.download_button("💰 Ricevuta", pdf_f, f"Ricevuta_{unique_key}.pdf", "application/pdf", key=f"btn_r_{unique_key}")
+                    c3.download_button("🚨 Multe", pdf_m, f"Multe_{unique_key}.pdf", "application/pdf", key=f"btn_m_{unique_key}")
+
+                    if c.get("url_fronte") or c.get("url_retro"):
+                        st.write("---")
+                        col_foto1, col_foto2 = st.columns(2)
+                        if c.get("url_fronte"):
+                            col_foto1.link_button("👁️ Fronte Patente", c["url_fronte"])
+                        if c.get("url_retro"):
+                            col_foto2.link_button("👁️ Retro Patente", c["url_retro"])
+    except Exception as e:
+        st.error(f"Errore nel caricamento archivio: {e}")
