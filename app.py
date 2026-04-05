@@ -36,6 +36,7 @@ def safe_text(text):
 
 def prossimo_numero_fattura():
     try:
+        # Chiediamo a Supabase l'ultimo numero inserito
         res = (
             supabase
             .table("contratti")
@@ -44,12 +45,15 @@ def prossimo_numero_fattura():
             .limit(1)
             .execute()
         )
-        if res.data:
-            return int(res.data[0]["numero_fattura"]) + 1
+        
+        if res.data and len(res.data) > 0:
+            ultimo_numero = res.data[0].get("numero_fattura")
+            if ultimo_numero is not None:
+                return int(ultimo_numero) + 1
+        
+        return 1 # Se la tabella è vuota, partiamo da 1
+    except Exception as e:
         return 1
-    except:
-        return 1
-
 def upload_to_supabase(file, targa, prefix):
     try:
         if file is None:
