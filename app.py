@@ -264,44 +264,43 @@ else:
                 supabase.table("contratti").insert(dati).execute()
                 st.success(f"Contratto n° {n_fatt} salvato!")
                 st.rerun()
-
-  st.divider()
+st.divider()
     st.subheader("📂 Archivio Contratti")
 
     try:
-        # CORRETTO: Tabella "contratti"
+        # Recuperiamo i dati dalla tabella corretta "contratti"
         res = supabase.table("contratti").select("*").order("id", desc=True).execute()
         
         if not res.data:
             st.info("Nessun contratto trovato in archivio.")
         else:
             for c in res.data:
-                # Usiamo l'ID e la Targa per creare una chiave unica per ogni riga
+                # Creiamo chiavi uniche per evitare sovrascritture nell'interfaccia
                 id_noleggio = c.get('id', '0')
                 targa_noleggio = c.get('targa', 'SCONOSCIUTA')
                 n_fattura = c.get('numero_fattura', '---')
                 
                 with st.expander(f"📄 Ricevuta {n_fattura} - {c.get('nome', '')} {c.get('cognome', '')} ({targa_noleggio})"):
-                    c1, c2, c3 = st.columns(3)
+                    col1, col2, col3 = st.columns(3)
 
-                    # Generiamo i PDF
-                    pdf_c = genera_pdf_tipo(c, "CONTRATTO")
-                    pdf_f = genera_pdf_tipo(c, "FATTURA")
-                    pdf_m = genera_pdf_tipo(c, "MULTE")
+                    # Generazione PDF
+                    pdf_contratto = genera_pdf_tipo(c, "CONTRATTO")
+                    pdf_ricevuta = genera_pdf_tipo(c, "FATTURA")
+                    pdf_multe = genera_pdf_tipo(c, "MULTE")
 
-                    # Usiamo chiavi diverse per ogni bottone (fondamentale!)
-                    c1.download_button("📜 Contratto", pdf_c, f"Contratto_{targa_noleggio}.pdf", "application/pdf", key=f"btn_c_{id_noleggio}")
-                    c2.download_button("💰 Ricevuta", pdf_f, f"Ricevuta_{n_fattura}.pdf", "application/pdf", key=f"btn_r_{id_noleggio}")
-                    c3.download_button("🚨 Multe", pdf_m, f"Multe_{targa_noleggio}.pdf", "application/pdf", key=f"btn_m_{id_noleggio}")
+                    # I download button con chiavi uniche basate sull'ID
+                    col1.download_button("📜 Contratto", pdf_contratto, f"Contratto_{targa_noleggio}.pdf", "application/pdf", key=f"c_{id_noleggio}")
+                    col2.download_button("💰 Ricevuta", pdf_ricevuta, f"Ricevuta_{n_fattura}.pdf", "application/pdf", key=f"r_{id_noleggio}")
+                    col3.download_button("🚨 Multe", pdf_multe, f"Multe_{targa_noleggio}.pdf", "application/pdf", key=f"m_{id_noleggio}")
 
-                    # Se ci sono le foto, mostra i link
+                    # Sezione Foto Patente (se presenti)
                     if c.get("url_fronte") or c.get("url_retro"):
                         st.write("---")
-                        cf1, cf2 = st.columns(2)
+                        f_col1, f_col2 = st.columns(2)
                         if c.get("url_fronte"):
-                            cf1.link_button("👁️ Fronte Patente", c["url_fronte"])
+                            f_col1.link_button("👁️ Fronte Patente", c["url_fronte"])
                         if c.get("url_retro"):
-                            cf2.link_button("👁️ Retro Patente", c["url_retro"])
+                            f_col2.link_button("👁️ Retro Patente", c["url_retro"])
                             
     except Exception as e:
         st.error(f"Errore tecnico nell'archivio: {e}")
