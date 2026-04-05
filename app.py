@@ -446,90 +446,82 @@ else:
 
                 st.rerun()
 
-    st.divider()
+   st.divider()
 
-    st.subheader("📂 Archivio Contratti")
+st.subheader("📂 Archivio Contratti")
 
-    try:
+try:
 
-        res = (
-            supabase
-            .table("contratti")
-            .select("*")
-            .order("id", desc=True)
-            .execute()
-        )
+    res = (
+        supabase
+        .table("contratti")
+        .select("*")
+        .order("id", desc=True)
+        .execute()
+    )
 
-        for c in res.data or []:
+    if not res.data:
+        st.info("Nessun contratto presente.")
+
+    else:
+
+        for c in res.data:
+
+            nome = c.get("nome") or ""
+            cognome = c.get("cognome") or ""
+            targa = c.get("targa") or ""
+            numero = c.get("numero_fattura") or "?"
 
             with st.expander(
-                f"📄 {c['numero_fattura']} - "
-                f"{c['nome']} {c['cognome']} "
-                f"({c['targa']})"
+                f"📄 {numero} - {nome} {cognome} ({targa})"
             ):
 
-                c1, c2, c3 = st.columns(3)
+                col1, col2, col3 = st.columns(3)
 
-                pdf_contratto = genera_pdf_tipo(
-                    c,
-                    "CONTRATTO"
-                )
+                try:
 
-                pdf_ricevuta = genera_pdf_tipo(
-                    c,
-                    "FATTURA"
-                )
+                    pdf_contratto = genera_pdf_tipo(
+                        c,
+                        "CONTRATTO"
+                    )
 
-                pdf_multe = genera_pdf_tipo(
-                    c,
-                    "MULTE"
-                )
+                    pdf_ricevuta = genera_pdf_tipo(
+                        c,
+                        "FATTURA"
+                    )
 
-                c1.download_button(
-                    "📜 Contratto",
-                    pdf_contratto,
-                    f"Contratto_{c['targa']}.pdf",
-                    "application/pdf",
-                    key=f"c_{c['id']}"
-                )
+                    pdf_multe = genera_pdf_tipo(
+                        c,
+                        "MULTE"
+                    )
 
-                c2.download_button(
-                    "💰 Ricevuta",
-                    pdf_ricevuta,
-                    f"Ricevuta_{c['numero_fattura']}.pdf",
-                    "application/pdf",
-                    key=f"r_{c['id']}"
-                )
+                    col1.download_button(
+                        "📜 Contratto",
+                        pdf_contratto,
+                        f"Contratto_{targa}.pdf",
+                        "application/pdf"
+                    )
 
-                c3.download_button(
-                    "🚨 Modulo Multe",
-                    pdf_multe,
-                    f"Multe_{c['targa']}.pdf",
-                    "application/pdf",
-                    key=f"m_{c['id']}"
-                )
+                    col2.download_button(
+                        "💰 Ricevuta",
+                        pdf_ricevuta,
+                        f"Ricevuta_{numero}.pdf",
+                        "application/pdf"
+                    )
 
-                if c.get("url_fronte") or c.get("url_retro"):
+                    col3.download_button(
+                        "🚨 Modulo Multe",
+                        pdf_multe,
+                        f"Multe_{targa}.pdf",
+                        "application/pdf"
+                    )
 
-                    st.write("---")
+                except Exception as pdf_error:
 
-                    col_f1, col_f2 = st.columns(2)
+                    st.error("Errore generazione PDF:")
+                    st.error(pdf_error)
 
-                    if c.get("url_fronte"):
+except Exception as e:
 
-                        col_f1.link_button(
-                            "👁️ Vedi Fronte Patente",
-                            c["url_fronte"]
-                        )
-
-                    if c.get("url_retro"):
-
-                        col_f2.link_button(
-                            "👁️ Vedi Retro Patente",
-                            c["url_retro"]
-                        )
-
-
-   except Exception as e:
     st.error("Errore archivio:")
     st.error(e)
