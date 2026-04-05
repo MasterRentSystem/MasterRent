@@ -529,8 +529,7 @@ else:
                             c["url_retro"]
                         )
 
-    except:
 
-        st.info(
-            "Inizia a caricare il primo noleggio."
-        )
+    except Exception as e:
+    st.error("Errore archivio:")
+    st.error(e)
