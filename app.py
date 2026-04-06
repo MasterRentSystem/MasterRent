@@ -70,9 +70,22 @@ def genera_pdf_tipo(c, tipo):
         pdf.cell(0, 10, "CONTRATTO DI NOLEGGIO / RENTAL AGREEMENT", ln=True, align="C", border="B")
         pdf.ln(8)
         pdf.set_font("Arial", "", 10)
-        testo = f"Cliente: {c.get('nome')} {c.get('cognome')}\nNato a: {c.get('luogo_nascita')}\nData nascita: {c.get('data_nascita')}\nPatente: {c.get('numero_patente')}\nTarga: {c.get('targa')}\nPeriodo: dal {c.get('inizio')} al {c.get('fine')}\nPrezzo: EUR {c.get('prezzo')}\nDeposito: EUR {c.get('deposito')}"
-        pdf.multi_cell(0, 6, safe_text(testo))
+       testo = f"""
+Cliente: {c.get('nome')} {c.get('cognome')}
+Nazionalità: {c.get('nazionalita', '---')}
+Codice Fiscale / ID: {c.get('codice_fiscale', '---')}
+Residenza: {c.get('indirizzo_cliente', '---')}
 
+Nato a: {c.get('luogo_nascita')}
+Data nascita: {c.get('data_nascita')}
+Patente: {c.get('numero_patente')}
+
+Targa: {c.get('targa')}
+Periodo: dal {c.get('inizio')} al {c.get('fine')}
+
+Prezzo: EUR {c.get('prezzo')}
+Deposito: EUR {c.get('deposito')}
+"""
     elif tipo == "FATTURA":
         pdf.set_font("Arial", "B", 15)
         pdf.cell(0, 10, "RICEVUTA DI PAGAMENTO / RECEIPT", ln=True, align="C", border="B")
@@ -89,9 +102,20 @@ def genera_pdf_tipo(c, tipo):
         pdf.cell(0, 10, "COMUNICAZIONE DATI CONDUCENTE", ln=True, align="C", border="B")
         pdf.ln(8)
         pdf.set_font("Arial", "", 10)
-        testo = f"Spett.le Polizia Locale\n\nIl veicolo TARGA: {c.get('targa')}\nera condotto da: {c.get('nome')} {c.get('cognome')}\nNato a: {c.get('luogo_nascita')}\nData nascita: {c.get('data_nascita')}\nPatente: {c.get('numero_patente')}\nData: {oggi}"
-        pdf.multi_cell(0, 6, safe_text(testo))
+       testo = f"""
+Spett.le Polizia Locale
 
+Il veicolo TARGA: {c.get('targa')}
+era condotto da: {c.get('nome')} {c.get('cognome')}
+
+Nato a: {c.get('luogo_nascita')} il {c.get('data_nascita')}
+Residente in: {c.get('indirizzo_cliente', '---')}
+Codice Fiscale / ID: {c.get('codice_fiscale', '---')}
+Patente: {c.get('numero_patente')}
+
+Si allega copia del documento d'identità/patente.
+Data: {oggi}
+"""
     if c.get("firma"):
         try:
             firma_bytes = base64.b64decode(c["firma"])
