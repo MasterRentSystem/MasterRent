@@ -211,51 +211,54 @@ else:
             else:
                 st.error("Compila i campi obbligatori (Nome, Cognome, Targa)")
 
-  # --- ARCHIVIO ---
+ # --- ARCHIVIO ---
     st.divider()
     st.subheader("📂 Archivio Contratti")
 
     try:
-        # Recupera tutti i contratti
+        # Recupera i dati
         res = supabase.table("contratti").select("*").order("id", desc=True).execute()
         
-     if res.data:
-            # BARRA DI RICERCA
+        if res.data:
+            # Barra di ricerca
             search_query = st.text_input("🔍 Cerca per Targa, Cognome o Data", "").lower()
             keywords = search_query.split()
 
+            # Filtro dati
             contratti_filtrati = []
             for c in res.data:
-                dati_contratto = f"{c.get('targa', '')} {c.get('cognome', '')} {c.get('nome', '')} {c.get('inizio', '')}".lower()
-                if all(key in dati_contratto for key in keywords):
+                testo_da_cercare = f"{c.get('targa', '')} {c.get('cognome', '')} {c.get('nome', '')} {c.get('inizio', '')}".lower()
+                if all(key in testo_da_cercare for key in keywords):
                     contratti_filtrati.append(c)
 
+            # Visualizzazione risultati
             if contratti_filtrati:
                 for c in contratti_filtrati:
-                    label = f"📝 {c.get('targa')} - {c.get('cognome').upper()} - {c.get('inizio')}"
+                    label = f"📝 {c.get('targa')} - {c.get('cognome', '').upper()} - {c.get('inizio', '')}"
                     with st.expander(label):
-                        # --- COLONNE PER PDF E WHATSAPP ---
+                        # Layout pulsanti
                         col1, col2, col3, col4 = st.columns(4)
                         id_c = c.get('id')
                         
+                        # Generazione PDF
                         pdf_contratto = genera_pdf_tipo(c, "CONTRATTO")
                         pdf_fattura = genera_pdf_tipo(c, "FATTURA")
                         pdf_multe = genera_pdf_tipo(c, "MULTE")
 
+                        # Pulsanti Download
                         col1.download_button("📜 Contratto", pdf_contratto, f"Contratto_{id_c}.pdf", key=f"c_{id_c}")
                         col2.download_button("💰 Ricevuta", pdf_fattura, f"Ricevuta_{id_c}.pdf", key=f"r_{id_c}")
                         col3.download_button("🚨 Multe", pdf_multe, f"Multe_{id_c}.pdf", key=f"m_{id_c}")
 
-                        # WHATSAPP
+                        # Tasto WhatsApp
                         import urllib.parse
-                        testo_wa = f"Ciao {c.get('nome')}, da Battaglia Rent! 🛵 Ti inviamo i documenti dello scooter {c.get('targa')}."
-                        msg_encoded = urllib.parse.quote(testo_wa)
-                        # Prende il numero dal database se esiste
+                        msg = f"Ciao {c.get('nome')}, da Battaglia Rent! 🛵 Ti inviamo i documenti dello scooter {c.get('targa')}."
+                        msg_encoded = urllib.parse.quote(msg)
                         num_tel = str(c.get('telefono', '')).replace(" ", "").replace("+", "")
-                        link_wa = f"https://wa.me/{num_tel}?text={msg_encoded}"
-                        col4.link_button("🟢 WhatsApp", link_wa)
+                        wa_url = f"https://wa.me/{num_tel}?text={msg_encoded}"
+                        col4.link_button("🟢 WhatsApp", wa_url)
 
-                        # FOTO
+                        # Sezione Foto
                         st.write("---")
                         fa, fb = st.columns(2)
                         if c.get("url_fronte"):
@@ -264,3 +267,8 @@ else:
                             fb.link_button("👁️ Vedi Retro", c["url_retro"])
             else:
                 st.warning("Nessun contratto trovato.")
+        else:
+            st.info("Archivio vuoto.")
+
+    except Exception as e:
+        st.error(f"Errore caricamento archivio: {e}")
