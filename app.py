@@ -1,610 +1,274 @@
 import streamlit as st
 import datetime
-import pandas as pd
-from supabase import create_client, Client
 from fpdf import FPDF
-import base64
+from supabase import create_client
 from streamlit_drawable_canvas import st_canvas
-import urllib.parse
-import numpy as np
-import cv2
+from PIL import Image
+import io
+import base64
 
-# -------------------------
-# CONFIGURAZIONE PAGINA
-# -------------------------
+# ------------------------------------------------
+# CONFIGURAZIONE
+# ------------------------------------------------
+st.set_page_config(layout="wide", page_title="Battaglia Rent Pro")
 
-st.set_page_config(
-    page_title="Battaglia Rent - Sistema Ufficiale",
-    layout="centered"
-)
+DITTA = "BATTAGLIA MARIANNA"
+INDIRIZZO_FISCALE = "Via Cognole, 5 - 80075 Forio (NA)"
+DATI_IVA = "C.F. BTTMNN87A53Z112S - P. IVA 10252601215"
 
-# -------------------------
-# CONNESSIONE SUPABASE
-# -------------------------
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
+supabase = create_client(url, key)
 
-url: str = st.secrets["SUPABASE_URL"]
-key: str = st.secrets["SUPABASE_KEY"]
+# ------------------------------------------------
+# UTILITY
+# ------------------------------------------------
+def safe_text(text):
+    if text is None: return ""
+    return str(text).encode("latin-1", "replace").decode("latin-1")
 
-supabase: Client = create_client(url, key)
-
-# -------------------------
-# LOGIN
-# -------------------------
-
-def check_password():
-
-    if "auth" not in st.session_state:
-        st.session_state.auth = False
-
-    if not st.session_state.auth:
-
-        st.title("🔒 Accesso Riservato")
-
-        pwd = st.text_input(
-            "Inserisci Password",
-            type="password"
-        )
-
-        if pwd == st.secrets["APP_PASSWORD"]:
-
-            st.session_state.auth = True
-            st.rerun()
-
-        elif pwd != "":
-
-            st.error("Password errata")
-
-        return False
-
-    return True
-
-
-if not check_password():
-    st.stop()
-
-# -------------------------
-# NUMERO FATTURA
-# -------------------------
-
-def get_next_fattura():
-
-    year = datetime.date.today().year
-
+def prossimo_numero_fattura():
     try:
-
-        res = supabase.table("contratti") \
-            .select("numero_fattura") \
-            .filter(
-                "numero_fattura",
-                "ilike",
-                f"{year}-%"
-            ) \
-            .order(
-                "numero_fattura",
-                desc=True
-            ) \
-            .limit(1) \
-            .execute()
-
-        if not res.data:
-
-            return f"{year}-001"
-
-        last_num = int(
-            res.data[0]["numero_fattura"]
-            .split("-")[1]
-        )
-
-        return f"{year}-{str(last_num + 1).zfill(3)}"
-
-    except:
-
-        return f"{year}-001"
-
-# -------------------------
-# REGISTRO GIORNALIERO
-# -------------------------
-
-def aggiorna_registro(prezzo):
-
-    oggi = str(datetime.date.today())
-
-    try:
-
-        res = supabase.table(
-            "registro_giornaliero"
-        ).select("*").eq(
-            "data",
-            oggi
-        ).execute()
-
+        res = supabase.table("contratti").select("numero_fattura").order("numero_fattura", desc=True).limit(1).execute()
         if res.data:
+            ultimo = res.data[0].get("numero_fattura")
+            return int(ultimo) + 1 if ultimo else 1
+        return 1
+    except: return 1
 
-            nuovo_n = res.data[0][
-                "numero_noleggi"
-            ] + 1
-
-            nuovo_t = float(
-                res.data[0]["totale_incasso"]
-            ) + float(prezzo)
-
-            supabase.table(
-                "registro_giornaliero"
-            ).update(
-                {
-                    "numero_noleggi": nuovo_n,
-                    "totale_incasso": nuovo_t
-                }
-            ).eq(
-                "data",
-                oggi
-            ).execute()
-
-        else:
-
-            supabase.table(
-                "registro_giornaliero"
-            ).insert(
-                {
-                    "data": oggi,
-                    "numero_noleggi": 1,
-                    "totale_incasso": prezzo
-                }
-            ).execute()
-
-    except:
-
-        st.error(
-            "Errore aggiornamento registro"
-        )
-
-# -------------------------
-# UPLOAD FOTO
-# -------------------------
-
-def upload_foto(file, targa, tipo):
-
-    if file is None:
-
-        return None
-
+def upload_to_supabase(file, targa, prefix):
     try:
-
-        ext = file.name.split(".")[-1]
-
-        nome = (
-            f"{tipo}_"
-            f"{targa}_"
-            f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
-            f".{ext}"
-        )
-
-        supabase.storage \
-            .from_("documenti") \
-            .upload(
-                nome,
-                file.getvalue()
-            )
-
-        url = supabase.storage \
-            .from_("documenti") \
-            .get_public_url(nome)
-
-        return url
-
-    except:
-
-        st.error("Errore upload foto")
-
+        if file is None: return None
+        # Genera un nome unico per il file
+        estensione = file.name.split('.')[-1]
+        nome_file = f"{prefix}{targa}{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.{estensione}"
+        
+        # Carica il file su Supabase
+        supabase.storage.from_("documenti").upload(nome_file, file.getvalue(), {"content-type": f"image/{estensione}"})
+        
+        # Recupera l'URL pubblico
+        url_pubblico = supabase.storage.from_("documenti").get_public_url(nome_file)
+        return url_pubblico
+    except Exception as e:
+        st.error(f"Errore caricamento foto: {e}")
         return None
-
-# -------------------------
-# GENERAZIONE PDF
-# -------------------------
-
-def genera_pdf(d, tipo):
-
+# ------------------------------------------------
+# FUNZIONE PDF
+# ------------------------------------------------
+def genera_pdf_tipo(c, tipo):
     pdf = FPDF()
-
     pdf.add_page()
+    oggi = datetime.date.today().strftime("%d/%m/%Y")
+    
+    # Intestazione Ditta
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 6, safe_text(DITTA), ln=True)
+    pdf.set_font("Arial", "", 9)
+    pdf.cell(0, 5, safe_text(INDIRIZZO_FISCALE), ln=True)
+    pdf.cell(0, 5, safe_text(DATI_IVA), ln=True)
+    pdf.ln(8)
 
-    pdf.set_font(
-        "Arial",
-        "B",
-        16
-    )
-
-    if tipo == "MULTE":
-
-        pdf.cell(
-            200,
-            10,
-            "DICHIARAZIONE DATI CONDUCENTE (L. 445/2000)",
-            ln=True,
-            align="C"
-        )
-
-        pdf.ln(10)
-
-        pdf.set_font(
-            "Arial",
-            "",
-            11
-        )
-
-        testo = (
-            f"La sottoscritta Marianna Battaglia "
-            f"dichiara che in data {d.get('inizio')} "
-            f"il veicolo targa {d.get('targa')} "
-            f"era affidato al Sig. "
-            f"{d.get('nome')} {d.get('cognome')} "
-            f"nato a {d.get('luogo_nascita')} "
-            f"il {d.get('data_nascita')} "
-            f"patente n. {d.get('numero_patente')}."
-        )
-
-        pdf.multi_cell(
-            0,
-            10,
-            testo
-        )
+    if tipo == "CONTRATTO":
+        pdf.set_font("Arial", "B", 14)
+        pdf.cell(0, 10, "CONTRATTO DI NOLEGGIO / RENTAL AGREEMENT", ln=True, align="C", border="B")
+        pdf.ln(5)
+        pdf.set_font("Arial", "", 9)
+        testo = f"Cliente: {c.get('nome')} {c.get('cognome')} | CF/ID: {c.get('codice_fiscale', '---')}\n" \
+                f"Residenza: {c.get('indirizzo_cliente', '---')}\n" \
+                f"Targa: {c.get('targa')} | Patente: {c.get('numero_patente')}\n" \
+                f"Periodo: dal {c.get('inizio')} al {c.get('fine')} | Prezzo: EUR {c.get('prezzo')}\n\n" \
+                f"CONDIZIONI DI NOLEGGIO:\n" \
+                f"1. Il conducente dichiara di essere in possesso di regolare patente.\n" \
+                f"2. Il locatario e responsabile di ogni danno causato al veicolo o a terzi.\n" \
+                f"3. In caso di furto, il locatario risponde per l'intero valore del veicolo.\n" \
+                f"4. Tutte le contravvenzioni (multe) prese durante il periodo sono a carico del locatario.\n" \
+                f"5. Il veicolo deve essere riconsegnato con lo stesso livello di carburante.\n\n" \
+                f"INFORMATIVA PRIVACY (GDPR):\n" \
+                f"Il cliente autorizza il trattamento dei dati personali e la conservazione digitale dei documenti " \
+                f"(foto patente/ID) per fini fiscali e di pubblica sicurezza (comunicazione dati conducente alle autorita)."
+        pdf.multi_cell(0, 5, safe_text(testo))
+        if c.get("firma"):
+            try:
+                firma_bytes = base64.b64decode(c["firma"])
+                pdf.image(io.BytesIO(firma_bytes), x=130, y=pdf.get_y()+10, w=50)
+            except: pass
+        pdf.ln(25)
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 10, "Firma del Cliente per Accettazione", ln=True, align="R")
 
     elif tipo == "FATTURA":
-
-        pdf.cell(
-            200,
-            10,
-            f"RICEVUTA FISCALE N. {d.get('numero_fattura')}",
-            ln=True,
-            align="C"
-        )
-
+        pdf.set_font("Arial", "B", 15)
+        pdf.cell(0, 10, "RICEVUTA DI PAGAMENTO / RECEIPT", ln=True, align="C", border="B")
         pdf.ln(10)
+        pdf.set_font("Arial", "", 10)
+        testo = f"Ricevuta n: {c.get('numero_fattura')} del {oggi}\n\n" \
+                f"Cliente: {c.get('nome')} {c.get('cognome')}\n" \
+                f"Codice Fiscale / ID: {c.get('codice_fiscale', '---')}\n" \
+                f"Targa: {c.get('targa')}\n" \
+                f"Totale Incassato: EUR {c.get('prezzo')}"
+        pdf.multi_cell(0, 6, safe_text(testo))
 
-        pdf.set_font(
-            "Arial",
-            "",
-            12
-        )
-
-        pdf.cell(
-            0,
-            10,
-            f"Cliente: {d.get('nome')} {d.get('cognome')}",
-            ln=True
-        )
-
-        pdf.cell(
-            0,
-            10,
-            f"Codice Fiscale: {d.get('codice_fiscale')}",
-            ln=True
-        )
-
-        pdf.cell(
-            0,
-            10,
-            f"Importo: Euro {d.get('prezzo')}",
-            ln=True
-        )
-
-    else:
-
-        pdf.cell(
-            200,
-            10,
-            "CONTRATTO DI NOLEGGIO VEICOLO",
-            ln=True,
-            align="C"
-        )
-
+    elif tipo == "MULTE":
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 5, "Spett. le", ln=True, align="R")
+        pdf.cell(0, 5, "Polizia Locale di ____________________", ln=True, align="R")
+        pdf.ln(8)
+        pdf.set_font("Arial", "B", 10)
+        pdf.multi_cell(0, 5, safe_text("OGGETTO:  RIFERIMENTO VS. ACCERTAMENTO VIOLAZIONE N. __________________ PROT. ________ - COMUNICAZIONE LOCAZIONE VEICOLO"))
+        pdf.ln(6)
+        pdf.set_font("Arial", "", 10)
+        corpo = f"In riferimento al Verbale di accertamento di infrazione al Codice della strada di cui all'oggetto, con la presente, la sottoscritta BATTAGLIA MARIANNA nata a Berlino (Germania) il 13/01/1987 e residente in Forio alla Via Cognole n. 5 in qualita di titolare dell'omonima ditta individuale, C.F.: BTTMNN87A53Z112S e P. IVA: 10252601215\n\n" \
+                f"DICHIARA\n\n" \
+                f"Ai sensi della L. 445/2000 che il veicolo targato {c.get('targa')} il giorno {c.get('inizio')} era concesso in locazione senza conducente al signor:\n\n" \
+                f"COGNOME E NOME: {c.get('nome')} {c.get('cognome')}\n" \
+                f"LUOGO E DATA DI NASCITA: {c.get('luogo_nascita')} il {c.get('data_nascita')}\n" \
+                f"RESIDENZA: {c.get('indirizzo_cliente', '---')}\n" \
+                f"IDENTIFICATO A MEZZO PATENTE: {c.get('numero_patente')}\n\n" \
+                f"Si allega: Copia del contratto di locazione con documento del trasgressore.\n" \
+                f"Ai sensi della L. 445/2000, si dichiara che la copia allegata e conforme all'originale.\n\n"
+        pdf.multi_cell(0, 5, safe_text(corpo))
         pdf.ln(10)
+        pdf.set_font("Arial", "I", 10)
+        pdf.cell(0, 5, "In fede,", ln=True, align="R")
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 5, "Marianna Battaglia", ln=True, align="R")
 
-        pdf.set_font(
-            "Arial",
-            "",
-            11
-        )
+    pdf_out = pdf.output(dest="S")
+    return bytes(pdf_out) if not isinstance(pdf_out, str) else pdf_out.encode("latin-1")
+# ------------------------------------------------
+# LOGICA APP
+# ------------------------------------------------
+if "autenticato" not in st.session_state:
+    st.session_state.autenticato = False
 
-        testo = (
-            f"Locatario: {d.get('nome')} {d.get('cognome')}\n"
-            f"Targa: {d.get('targa')}\n"
-            f"Dal: {d.get('inizio')} "
-            f"Al: {d.get('fine')}\n"
-            f"Prezzo: Euro {d.get('prezzo')}"
-        )
+if not st.session_state.autenticato:
+    st.title("🔐 Login Battaglia Rent")
+    pwd = st.text_input("Inserisci Password", type="password")
+    if st.button("Entra"):
+        if pwd == st.secrets["APP_PASSWORD"]:
+            st.session_state.autenticato = True
+            st.rerun()
+        else: st.error("Password errata")
+else:
+    st.title("🛵 Nuovo Noleggio Scooter")
+    with st.form("nuovo_noleggio", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        nome = col1.text_input("Nome")
+        cognome = col1.text_input("Cognome")
+        naz = col1.selectbox("Nazionalità", ["Italiana", "Straniera"])
+        cf = col1.text_input("Codice Fiscale / ID Passaporto")
+        ind = col1.text_area("Indirizzo Residenza Completo")
+        
+        targa = col2.text_input("Targa").upper()
+        pat = col2.text_input("Numero Patente")
+        l_nas = col2.text_input("Luogo nascita")
+        d_nas = col2.text_input("Data nascita (GG/MM/AAAA)")
+        prezzo = col2.number_input("Prezzo Totale (€)", min_value=0.0)
+        deposito = col2.number_input("Deposito (€)", min_value=0.0)
+        
+        d1, d2 = st.columns(2)
+        inizio = d1.date_input("Inizio Noleggio")
+        fine = d2.date_input("Fine Noleggio")
 
-        pdf.multi_cell(
-            0,
-            10,
-            testo
-        )
+        st.subheader("📸 Documenti")
+        f1, f2 = st.columns(2)
+        fronte = f1.file_uploader("Fronte Patente", type=["jpg", "png", "jpeg"])
+        retro = f2.file_uploader("Retro Patente", type=["jpg", "png", "jpeg"])
 
-    return pdf.output(
-        dest="S"
-    ).encode(
-        "latin-1",
-        "ignore"
-    )
+        st.subheader("⚖️ Note Legali e Privacy")
+        st.info("Dichiaro di aver preso visione delle condizioni di noleggio e di assumermi ogni responsabilità civile e penale per danni o infrazioni. Autorizzo la ditta a conservare le foto dei miei documenti per fini di legge.")
+        check_condizioni = st.checkbox("Accetto le Condizioni di Noleggio")
+        check_privacy = st.checkbox("Accetto l'Informativa Privacy e conservazione foto documenti")
 
-# -------------------------
-# MENU
-# -------------------------
+        st.subheader("✍️ Firma")
+        canvas = st_canvas(stroke_width=3, stroke_color="#000", background_color="#eee", height=150, width=400, key="firma")
 
-menu = st.sidebar.radio(
+        if st.form_submit_button("💾 SALVA E GENERA"):
+            if not check_condizioni or not check_privacy:
+                st.error("Devi accettare le condizioni e la privacy per procedere!")
+            elif nome and cognome and targa:
+                firma_b64 = ""
+                if canvas.image_data is not None:
+                    img = Image.fromarray(canvas.image_data.astype("uint8"))
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    firma_b64 = base64.b64encode(buf.getvalue()).decode()
 
-    "Menu",
-
-    [
-        "Nuovo Noleggio",
-        "Archivio Storico",
-        "Registro Giornaliero",
-        "Backup"
-    ]
-
-)
-
-# -------------------------
-# NUOVO NOLEGGIO
-# -------------------------
-
-if menu == "Nuovo Noleggio":
-
-    st.header("🛵 Nuovo Noleggio")
-
-    with st.form(
-        "form_noleggio",
-        clear_on_submit=True
-    ):
-
-        nome = st.text_input("Nome")
-
-        cognome = st.text_input("Cognome")
-
-        telefono = st.text_input("Telefono")
-
-        targa = st.text_input("Targa")
-
-        inizio = st.date_input("Inizio")
-
-        fine = st.date_input("Fine")
-
-        prezzo = st.number_input(
-            "Prezzo",
-            min_value=0.0
-        )
-
-        deposito = st.number_input(
-            "Deposito",
-            min_value=0.0
-        )
-
-        st.write("Firma Cliente")
-
-        canvas = st_canvas(
-            height=150,
-            stroke_width=2
-        )
-
-        submit = st.form_submit_button(
-            "SALVA"
-        )
-
-        if submit:
-
-            if not nome:
-
-                st.error("Nome obbligatorio")
-
-                st.stop()
-
-            if not targa:
-
-                st.error("Targa obbligatoria")
-
-                st.stop()
-
-            if canvas.image_data is None:
-
-                st.error("Firma obbligatoria")
-
-                st.stop()
-
-            numero_fattura = get_next_fattura()
-
-            try:
-
-                img = canvas.image_data.astype(
-                    np.uint8
-                )
-
-                _, buffer = cv2.imencode(
-                    ".png",
-                    img
-                )
-
-                firma_b64 = (
-                    "data:image/png;base64,"
-                    + base64.b64encode(
-                        buffer
-                    ).decode()
-                )
+                u_f = upload_to_supabase(fronte, targa, "fronte")
+                u_r = upload_to_supabase(retro, targa, "retro")
+                n_f = prossimo_numero_fattura()
 
                 dati = {
-
-                    "nome": nome,
-                    "cognome": cognome,
-                    "telefono": telefono,
-                    "targa": targa,
-                    "inizio": str(inizio),
-                    "fine": str(fine),
-                    "prezzo": prezzo,
-                    "deposito": deposito,
-                    "numero_fattura": numero_fattura,
-                    "firma": firma_b64
-
+                    "nome": nome, "cognome": cognome, "targa": targa, "prezzo": prezzo, 
+                    "deposito": deposito, "inizio": str(inizio), "fine": str(fine),
+                    "firma": firma_b64, "numero_fattura": n_f, "luogo_nascita": l_nas, 
+                    "data_nascita": d_nas, "numero_patente": pat, "url_fronte": u_f, 
+                    "url_retro": u_r, "codice_fiscale": cf, "indirizzo_cliente": ind, "nazionalita": naz
                 }
+                supabase.table("contratti").insert(dati).execute()
+                st.success(f"Contratto n° {n_f} salvato con successo!")
+                st.rerun()
+            else:
+                st.error("Compila i campi obbligatori (Nome, Cognome, Targa)")
 
-                supabase.table(
-                    "contratti"
-                ).insert(
-                    dati
-                ).execute()
+ # --- ARCHIVIO ---
+    st.divider()
+    st.subheader("📂 Archivio Contratti")
 
-                aggiorna_registro(
-                    prezzo
-                )
+    try:
+        # Recupera i dati
+        res = supabase.table("contratti").select("*").order("id", desc=True).execute()
+        
+        if res.data:
+            # Barra di ricerca
+            search_query = st.text_input("🔍 Cerca per Targa, Cognome o Data", "").lower()
+            keywords = search_query.split()
 
-                st.success(
-                    f"Noleggio salvato - "
-                    f"Fattura {numero_fattura}"
-                )
+            # Filtro dati
+            contratti_filtrati = []
+            for c in res.data:
+                testo_da_cercare = f"{c.get('targa', '')} {c.get('cognome', '')} {c.get('nome', '')} {c.get('inizio', '')}".lower()
+                if all(key in testo_da_cercare for key in keywords):
+                    contratti_filtrati.append(c)
 
-                if telefono:
+            # Visualizzazione risultati
+            if contratti_filtrati:
+                for c in contratti_filtrati:
+                    label = f"📝 {c.get('targa')} - {c.get('cognome', '').upper()} - {c.get('inizio', '')}"
+                    with st.expander(label):
+                        # Layout pulsanti
+                        col1, col2, col3, col4 = st.columns(4)
+                        id_c = c.get('id')
+                        
+                        # Generazione PDF
+                        pdf_contratto = genera_pdf_tipo(c, "CONTRATTO")
+                        pdf_fattura = genera_pdf_tipo(c, "FATTURA")
+                        pdf_multe = genera_pdf_tipo(c, "MULTE")
 
-                    msg = urllib.parse.quote(
-                        f"Buongiorno {nome}, "
-                        f"Battaglia Rent.\n"
-                        f"Scooter {targa}\n"
-                        f"Totale €{prezzo}"
-                    )
+                        # Pulsanti Download
+                        col1.download_button("📜 Contratto", pdf_contratto, f"Contratto_{id_c}.pdf", key=f"c_{id_c}")
+                        col2.download_button("💰 Ricevuta", pdf_fattura, f"Ricevuta_{id_c}.pdf", key=f"r_{id_c}")
+                        col3.download_button("🚨 Multe", pdf_multe, f"Multe_{id_c}.pdf", key=f"m_{id_c}")
 
-                    st.markdown(
-                        f"[📲 Invia WhatsApp]"
-                        f"(https://wa.me/{telefono.replace(' ','')}?text={msg})"
-                    )
+                        # Tasto WhatsApp
+                        import urllib.parse
+                        msg = f"Ciao {c.get('nome')}, da Battaglia Rent! 🛵 Ti inviamo i documenti dello scooter {c.get('targa')}."
+                        msg_encoded = urllib.parse.quote(msg)
+                        num_tel = str(c.get('telefono', '')).replace(" ", "").replace("+", "")
+                        wa_url = f"https://wa.me/{num_tel}?text={msg_encoded}"
+                        col4.link_button("🟢 WhatsApp", wa_url)
 
-            except:
+                        # Sezione Foto
+                        st.write("---")
+                        fa, fb = st.columns(2)
+                        if c.get("url_fronte"):
+                            fa.link_button("👁️ Vedi Fronte", c["url_fronte"])
+                        if c.get("url_retro"):
+                            fb.link_button("👁️ Vedi Retro", c["url_retro"])
+            else:
+                st.warning("Nessun contratto trovato.")
+        else:
+            st.info("Archivio vuoto.")
 
-                st.error(
-                    "Errore salvataggio"
-                )
-
-# -------------------------
-# ARCHIVIO
-# -------------------------
-
-elif menu == "Archivio Storico":
-
-    st.header("📂 Archivio")
-
-    cerca = st.text_input(
-        "Cerca"
-    ).lower()
-
-    res = supabase.table(
-        "contratti"
-    ).select("*").order(
-        "id",
-        desc=True
-    ).execute()
-
-    for c in res.data:
-
-        testo = (
-            f"{c.get('targa')} "
-            f"{c.get('cognome')} "
-            f"{c.get('numero_fattura')}"
-        ).lower()
-
-        if cerca in testo:
-
-            with st.expander(
-
-                f"{c.get('numero_fattura')} "
-                f"{c.get('targa')}"
-
-            ):
-
-                st.download_button(
-                    "📜 Contratto",
-                    genera_pdf(
-                        c,
-                        "CONTRATTO"
-                    ),
-                    file_name="contratto.pdf"
-                )
-
-                st.download_button(
-                    "💰 Ricevuta",
-                    genera_pdf(
-                        c,
-                        "FATTURA"
-                    ),
-                    file_name="ricevuta.pdf"
-                )
-
-                st.download_button(
-                    "🚨 Multe",
-                    genera_pdf(
-                        c,
-                        "MULTE"
-                    ),
-                    file_name="multe.pdf"
-                )
-
-# -------------------------
-# REGISTRO
-# -------------------------
-
-elif menu == "Registro Giornaliero":
-
-    st.header("📊 Registro")
-
-    res = supabase.table(
-        "registro_giornaliero"
-    ).select("*").order(
-        "data",
-        desc=True
-    ).execute()
-
-    df = pd.DataFrame(
-        res.data
-    )
-
-    if not df.empty:
-
-        st.table(df)
-
-# -------------------------
-# BACKUP
-# -------------------------
-
-elif menu == "Backup":
-
-    st.header("💾 Backup")
-
-    if st.button(
-        "Genera Backup"
-    ):
-
-        res = supabase.table(
-            "contratti"
-        ).select("*").execute()
-
-        df = pd.DataFrame(
-            res.data
-        )
-
-        csv = df.to_csv(
-            index=False
-        ).encode(
-            "utf-8"
-        )
-
-        nome = (
-            f"backup_"
-            f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            ".csv"
-        )
-
-        supabase.storage \
-            .from_("backup") \
-            .upload(
-                nome,
-                csv
-            )
-
-        st.success(
-            "Backup completato"
-        )
+    except Exception as e:
+        st.error(f"Errore caricamento archivio: {e}")
