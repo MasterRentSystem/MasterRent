@@ -127,20 +127,28 @@ if not st.session_state.autenticato:
         else:
             st.error("Password errata")
 else:
-    # --- FORM NUOVO NOLEGGIO ---
-    st.title("🛵 Nuovo Noleggio Scooter")
     with st.form("nuovo_noleggio", clear_on_submit=True):
         col1, col2 = st.columns(2)
         nome = col1.text_input("Nome")
         cognome = col1.text_input("Cognome")
-        luogo_nascita = col1.text_input("Luogo nascita")
-        data_nascita = col1.text_input("Data nascita")
+        nazionalita = col1.selectbox("Nazionalità", ["Italiana", "Straniera"])
+        
+        # Il Codice Fiscale appare solo se la nazionalità è Italiana
+        cf = ""
+        if nazionalita == "Italiana":
+            cf = col1.text_input("Codice Fiscale")
+        else:
+            cf = col1.text_input("ID / Passaporto (per Stranieri)")
+
+        indirizzo_c = col1.text_area("Indirizzo di Residenza (completo per Vigili)")
         data_inizio = col1.date_input("Inizio Noleggio")
         
         targa = col2.text_input("Targa").upper()
-        prezzo = col2.number_input("Prezzo Totale (€)", min_value=0.0)
-        deposito = col2.number_input("Deposito Cauzionale (€)", min_value=0.0)
         patente = col2.text_input("Numero Patente")
+        luogo_nascita = col2.text_input("Luogo nascita")
+        data_nascita = col2.text_input("Data nascita")
+        prezzo = col2.number_input("Prezzo Totale (€)", min_value=0.0)
+        deposito = col2.number_input("Deposito (€)", min_value=0.0)
         data_fine = col2.date_input("Fine Noleggio")
 
         st.subheader("📸 Documenti e Firma")
@@ -159,6 +167,7 @@ else:
                     img.save(buf, format="PNG")
                     firma_b64 = base64.b64encode(buf.getvalue()).decode()
 
+                # Caricamento foto (Assicurati che il bucket "documenti" sia PUBLIC)
                 url_f = upload_to_supabase(fronte, targa, "fronte")
                 url_r = upload_to_supabase(retro, targa, "retro")
                 n_fatt = prossimo_numero_fattura()
@@ -169,35 +178,9 @@ else:
                     "inizio": str(data_inizio), "fine": str(data_fine),
                     "firma": firma_b64, "numero_fattura": n_fatt,
                     "luogo_nascita": luogo_nascita, "data_nascita": data_nascita,
-                    "numero_patente": patente, "url_fronte": url_f, "url_retro": url_r
+                    "numero_patente": patente, "url_fronte": url_f, "url_retro": url_r,
+                    "codice_fiscale": cf, "indirizzo_cliente": indirizzo_c, "nazionalita": nazionalita
                 }
                 supabase.table("contratti").insert(dati).execute()
-                st.success(f"Contratto n° {n_fatt} salvato!")
+                st.success(f"Contratto n° {n_fatt} salvato correttamente!")
                 st.rerun()
-            else:
-                st.error("Compila i campi obbligatori (Nome, Cognome, Targa)")
-
-    # --- ARCHIVIO ---
-    st.divider()
-    st.subheader("📂 Archivio Contratti")
-    try:
-        res = supabase.table("contratti").select("*").order("id", desc=True).execute()
-        if res.data:
-            for c in res.data:
-                label = f"📄 {c.get('numero_fattura')} - {c.get('nome')} {c.get('cognome')} ({c.get('targa')})"
-                with st.expander(label):
-                    c1, c2, c3 = st.columns(3)
-                    id_c = c.get('id')
-                    c1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"Contratto_{id_c}.pdf", "application/pdf", key=f"c_{id_c}")
-                    c2.download_button("💰 Ricevuta", genera_pdf_tipo(c, "FATTURA"), f"Ricevuta_{id_c}.pdf", "application/pdf", key=f"r_{id_c}")
-                    c3.download_button("🚨 Multe", genera_pdf_tipo(c, "MULTE"), f"Multe_{id_c}.pdf", "application/pdf", key=f"m_{id_c}")
-                    
-                    if c.get("url_fronte") or c.get("url_retro"):
-                        st.write("---")
-                        col_f1, col_f2 = st.columns(2)
-                        if c.get("url_fronte"): col_f1.link_button("👁️ Vedi Fronte", c["url_fronte"])
-                        if c.get("url_retro"): col_f2.link_button("👁️ Vedi Retro", c["url_retro"])
-        else:
-            st.info("Archivio vuoto.")
-    except Exception as e:
-        st.error(f"Errore caricamento: {e}")
