@@ -91,28 +91,37 @@ def genera_pdf_tipo(c, tipo):
                 f"Totale Incassato: EUR {c.get('prezzo')}"
         pdf.multi_cell(0, 6, safe_text(testo))
 
-    elif tipo == "MULTE":
-        pdf.set_font("Arial", "B", 14)
-        pdf.cell(0, 10, "COMUNICAZIONE DATI CONDUCENTE", ln=True, align="C", border="B")
+   elif tipo == "MULTE":
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 5, "Spett. le", ln=True, align="R")
+        pdf.cell(0, 5, "Polizia Locale di ____________________", ln=True, align="R")
+        pdf.ln(10)
+        
+        pdf.set_font("Arial", "B", 10)
+        pdf.multi_cell(0, 5, safe_text(f"OGGETTO:  RIFERIMENTO VS. ACCERTAMENTO VIOLAZIONE N. __________________ PROT. ________ - COMUNICAZIONE LOCAZIONE VEICOLO"))
         pdf.ln(8)
+        
         pdf.set_font("Arial", "", 10)
-        testo = f"Spett.le Polizia Locale,\n\nIl veicolo TARGA {c.get('targa')} era condotto da:\n" \
-                f"Nome: {c.get('nome')} {c.get('cognome')}\n" \
-                f"Nato a: {c.get('luogo_nascita')} il {c.get('data_nascita')}\n" \
-                f"Residente: {c.get('indirizzo_cliente', '---')}\n" \
-                f"CF/ID: {c.get('codice_fiscale', '---')} | Patente: {c.get('numero_patente')}"
-        pdf.multi_cell(0, 6, safe_text(testo))
-
-    if c.get("firma"):
-        try:
-            firma_bytes = base64.b64decode(c["firma"])
-            pdf.image(io.BytesIO(firma_bytes), x=130, y=pdf.get_y()+10, w=50)
-        except: pass
-
-    pdf.ln(25)
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(0, 10, "Firma del Cliente per Accettazione", ln=True, align="R")
-    
+        corpo_testo = f"In riferimento al Verbale di accertamento di infrazione al Codice della strada di cui all'oggetto, con la presente, la sottoscritta BATTAGLIA MARIANNA nata a Berlino (Germania) il 13/01/1987 e residente in Forio alla Via Cognole n. 5 in qualità di titolare dell'omonima ditta individuale, C.F.: BTTMNN87A53Z112S e P. IVA: 10252601215\n\n" \
+                      f"DICHIARA\n\n" \
+                      f"Ai sensi della L. 445/2000 che il veicolo modello _______________ targato {c.get('targa')} il giorno {c.get('inizio')} era concesso in locazione senza conducente al signor:\n\n" \
+                      f"COGNOME E NOME: {c.get('nome')} {c.get('cognome')}\n" \
+                      f"LUOGO E DATA DI NASCITA: {c.get('luogo_nascita')} il {c.get('data_nascita')}\n" \
+                      f"RESIDENZA: {c.get('indirizzo_cliente', '---')}\n" \
+                      f"IDENTIFICATO A MEZZO: {c.get('numero_patente')}\n\n" \
+                      f"La presente al fine di procedere alla rinotifica nei confronti del locatario sopra indicato.\n\n" \
+                      f"Si allega:\n" \
+                      f" - Copia del contratto di locazione con documento del trasgressore\n\n" \
+                      f"Ai sensi della L. 445/2000, il sottoscritto dichiara che la copia del contratto che si allega è conforme all'originale agli atti della ditta."
+        
+        pdf.multi_cell(0, 5, safe_text(corpo_testo))
+        pdf.ln(15)
+        
+        # Firma del titolare (Marianna Battaglia) invece del cliente
+        pdf.set_font("Arial", "I", 10)
+        pdf.cell(0, 5, "In fede", ln=True, align="R")
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 5, "Marianna Battaglia", ln=True, align="R")
     pdf_out = pdf.output(dest="S")
     return bytes(pdf_out) if not isinstance(pdf_out, str) else pdf_out.encode("latin-1")
 
