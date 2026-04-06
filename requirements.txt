@@ -1,6 +1,7 @@
 streamlit
+pandas
 supabase
-fpdf2>=2.7
+fpdf2
 streamlit-drawable-canvas
-pillow
-python-dateutil
+opencv-python-headless
+numpy
