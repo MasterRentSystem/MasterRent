@@ -177,34 +177,39 @@ else:
         
         canvas = st_canvas(stroke_width=3, stroke_color="#000", background_color="#eee", height=150, width=400, key="firma_nuova")
 
-        if st.form_submit_button("💾 SALVA CONTRATTO"):
+     if st.form_submit_button("💾 SALVA CONTRATTO"):
             if nome and cognome and targa:
-                firma_b64 = ""
-                if canvas.image_data is not None:
-                    img = Image.fromarray(canvas.image_data.astype("uint8"))
-                    buf = io.BytesIO()
-                    img.save(buf, format="PNG")
-                    firma_b64 = base64.b64encode(buf.getvalue()).decode()
+                try:
+                    firma_b64 = ""
+                    if canvas.image_data is not None:
+                        img = Image.fromarray(canvas.image_data.astype("uint8"))
+                        buf = io.BytesIO()
+                        img.save(buf, format="PNG")
+                        firma_b64 = base64.b64encode(buf.getvalue()).decode()
 
-                url_f = upload_to_supabase(fronte, targa, "fronte")
-                url_r = upload_to_supabase(retro, targa, "retro")
-                n_fatt = prossimo_numero_fattura()
+                    url_f = upload_to_supabase(fronte, targa, "fronte")
+                    url_r = upload_to_supabase(retro, targa, "retro")
+                    n_fatt = prossimo_numero_fattura()
 
-                dati = {
-                    "nome": nome, "cognome": cognome, "targa": targa,
-                    "prezzo": prezzo, "deposito": deposito,
-                    "inizio": str(data_inizio), "fine": str(data_fine),
-                    "firma": firma_b64, "numero_fattura": n_fatt,
-                    "luogo_nascita": luogo_nascita, "data_nascita": data_nascita,
-                    "numero_patente": patente, "url_fronte": url_f, "url_retro": url_r,
-                    "codice_fiscale": cf, "indirizzo_cliente": indirizzo_c, "nazionalita": nazionalita
-                }
-                supabase.table("contratti").insert(dati).execute()
-                st.success(f"Contratto n° {n_fatt} salvato correttamente!")
-                st.rerun()
+                    dati = {
+                        "nome": nome, "cognome": cognome, "targa": targa,
+                        "prezzo": prezzo, "deposito": deposito,
+                        "inizio": str(data_inizio), "fine": str(data_fine),
+                        "firma": firma_b64, "numero_fattura": n_fatt,
+                        "luogo_nascita": luogo_nascita, "data_nascita": data_nascita,
+                        "numero_patente": patente, "url_fronte": url_f, "url_retro": url_r,
+                        "codice_fiscale": cf, "indirizzo_cliente": indirizzo_c, "nazionalita": nazionalita
+                    }
+                    
+                    # Proviamo a inserire e catturiamo l'errore specifico
+                    res = supabase.table("contratti").insert(dati).execute()
+                    st.success(f"Contratto n° {n_fatt} salvato!")
+                    st.rerun()
+                except Exception as e:
+                    # Questo scriverà l'errore reale sullo schermo dell'app!
+                    st.error(f"ERRORE REALE DA SUPABASE: {str(e)}")
             else:
                 st.error("Nome, Cognome e Targa sono obbligatori")
-
     # --- ARCHIVIO ---
     st.divider()
     st.subheader("📂 Archivio Contratti")
