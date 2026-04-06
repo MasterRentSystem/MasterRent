@@ -39,11 +39,19 @@ def prossimo_numero_fattura():
 def upload_to_supabase(file, targa, prefix):
     try:
         if file is None: return None
-        nome_file = f"{prefix}{targa}{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-        supabase.storage.from_("documenti").upload(nome_file, file.getvalue())
-        return supabase.storage.from_("documenti").get_public_url(nome_file)
-    except: return None
-
+        # Genera un nome unico per il file
+        estensione = file.name.split('.')[-1]
+        nome_file = f"{prefix}{targa}{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.{estensione}"
+        
+        # Carica il file su Supabase
+        supabase.storage.from_("documenti").upload(nome_file, file.getvalue(), {"content-type": f"image/{estensione}"})
+        
+        # Recupera l'URL pubblico
+        url_pubblico = supabase.storage.from_("documenti").get_public_url(nome_file)
+        return url_pubblico
+    except Exception as e:
+        st.error(f"Errore caricamento foto: {e}")
+        return None
 # ------------------------------------------------
 # FUNZIONE PDF
 # ------------------------------------------------
