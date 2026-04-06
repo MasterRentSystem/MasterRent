@@ -58,6 +58,7 @@ def genera_pdf_tipo(c, tipo):
     pdf.add_page()
     oggi = datetime.date.today().strftime("%d/%m/%Y")
     
+    # Intestazione
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 6, safe_text(DITTA), ln=True)
     pdf.set_font("Arial", "", 9)
@@ -65,7 +66,7 @@ def genera_pdf_tipo(c, tipo):
     pdf.cell(0, 5, safe_text(DATI_IVA), ln=True)
     pdf.ln(8)
 
- if tipo == "CONTRATTO":
+    if tipo == "CONTRATTO":
         pdf.set_font("Arial", "B", 15)
         pdf.cell(0, 10, "CONTRATTO DI NOLEGGIO / RENTAL AGREEMENT", ln=True, align="C", border="B")
         pdf.ln(8)
@@ -118,7 +119,8 @@ def genera_pdf_tipo(c, tipo):
         try:
             firma_bytes = base64.b64decode(c["firma"])
             pdf.image(io.BytesIO(firma_bytes), x=130, y=pdf.get_y()+10, w=50)
-        except: pass
+        except:
+            pass
 
     pdf.ln(25)
     pdf.set_font("Arial", "B", 10)
