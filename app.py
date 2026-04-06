@@ -237,31 +237,40 @@ else:
 
             if contratti_filtrati:
                 st.write(f"Contratti trovati: {len(contratti_filtrati)}")
-                for c in contratti_filtrati:
+               for c in contratti_filtrati:
                     label = f"📝 Ricevuta {c.get('numero_fattura')} | {c.get('targa')} | {c.get('cognome').upper()} | Data: {c.get('inizio')}"
                     
                     with st.expander(label):
-                        col1, col2, col3 = st.columns(3)
+                        # --- NUOVA RIGA CON 4 COLONNE ---
+                        col1, col2, col3, col4 = st.columns(4)
                         id_c = c.get('id')
                         
-                        # --- DOWNLOAD PDF ---
-                        col1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"Contratto_{id_c}.pdf", key=f"c_{id_c}")
-                        col2.download_button("💰 Ricevuta", genera_pdf_tipo(c, "FATTURA"), f"Ricevuta_{id_c}.pdf", key=f"r_{id_c}")
-                        col3.download_button("🚨 Multe", genera_pdf_tipo(c, "MULTE"), f"Multe_{id_c}.pdf", key=f"m_{id_c}")
-                        
-                        # --- VISIONE FOTO ---
-                        st.write("---")
-                        st.markdown("*📸 Documenti d'identità caricati:*")
-                        fa, fb = st.columns(2)
-                        
-                        if c.get("url_fronte"):
-                            fa.link_button("👁️ Vedi Fronte Patente", c["url_fronte"])
-                        if c.get("url_retro"):
-                            fb.link_button("👁️ Vedi Retro Patente", c["url_retro"])
-            else:
-                st.warning("Nessun contratto corrisponde a tutti i termini inseriti.")
-        else:
-            st.info("L'archivio è ancora vuoto.")
+                        # Generazione dati PDF
+                        pdf_contratto = genera_pdf_tipo(c, "CONTRATTO")
+                        pdf_fattura = genera_pdf_tipo(c, "FATTURA")
+                        pdf_multe = genera_pdf_tipo(c, "MULTE")
 
-    except Exception as e:
-        st.error(f"Errore nel caricamento dell'archivio: {e}")
+                        # Pulsanti Download
+                        col1.download_button("📜 Contratto", pdf_contratto, f"Contratto_{id_c}.pdf", key=f"c_{id_c}")
+                        col2.download_button("💰 Ricevuta", pdf_fattura, f"Ricevuta_{id_c}.pdf", key=f"r_{id_c}")
+                        col3.download_button("🚨 Multe", pdf_multe, f"Multe_{id_c}.pdf", key=f"m_{id_c}")
+
+                        # --- LOGICA TASTO WHATSAPP ---
+                        import urllib.parse
+                        # Messaggio pronto per il cliente
+                        testo_wa = f"Ciao {c.get('nome')}, da Battaglia Rent! 🛵\nTi inviamo il contratto per lo scooter {c.get('targa')}.\nA presto!"
+                        msg_encoded = urllib.parse.quote(testo_wa)
+                        
+                        # Se hai il numero nel database lo usiamo, altrimenti apre WA generico
+                        num_tel = str(c.get('telefono', '')) 
+                        link_wa = f"https://wa.me/{num_tel}?text={msg_encoded}"
+                        
+                        col4.link_button("🟢 WhatsApp", link_wa)
+
+                        # --- VISIONE FOTO (Sotto i pulsanti) ---
+                        st.write("---")
+                        fa, fb = st.columns(2)
+                        if c.get("url_fronte"):
+                            fa.link_button("👁️ Vedi Fronte", c["url_fronte"])
+                        if c.get("url_retro"):
+                            fb.link_button("👁️ Vedi Retro", c["url_retro"])
