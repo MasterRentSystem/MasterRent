@@ -219,58 +219,48 @@ else:
         # Recupera tutti i contratti
         res = supabase.table("contratti").select("*").order("id", desc=True).execute()
         
-        if res.data:
-            # BARRA DI RICERCA INTELLIGENTE
-            search_query = st.text_input("🔍 Cerca (es: Targa + Cognome o Targa + Data)", "").lower()
-
-            # Dividiamo la ricerca in singole parole (es: "AB123CD" e "2024")
+     if res.data:
+            # BARRA DI RICERCA
+            search_query = st.text_input("🔍 Cerca per Targa, Cognome o Data", "").lower()
             keywords = search_query.split()
 
             contratti_filtrati = []
             for c in res.data:
-                # Creiamo una stringa unica con tutti i dati del contratto per questo record
-                dati_contratto = f"{c.get('targa', '')} {c.get('cognome', '')} {c.get('nome', '')} {c.get('inizio', '')} {c.get('numero_fattura', '')}".lower()
-                
-                # Verifichiamo se TUTTE le parole cercate sono presenti in questo contratto
+                dati_contratto = f"{c.get('targa', '')} {c.get('cognome', '')} {c.get('nome', '')} {c.get('inizio', '')}".lower()
                 if all(key in dati_contratto for key in keywords):
                     contratti_filtrati.append(c)
 
             if contratti_filtrati:
-                st.write(f"Contratti trovati: {len(contratti_filtrati)}")
-               for c in contratti_filtrati:
-                    label = f"📝 Ricevuta {c.get('numero_fattura')} | {c.get('targa')} | {c.get('cognome').upper()} | Data: {c.get('inizio')}"
-                    
+                for c in contratti_filtrati:
+                    label = f"📝 {c.get('targa')} - {c.get('cognome').upper()} - {c.get('inizio')}"
                     with st.expander(label):
-                        # --- NUOVA RIGA CON 4 COLONNE ---
+                        # --- COLONNE PER PDF E WHATSAPP ---
                         col1, col2, col3, col4 = st.columns(4)
                         id_c = c.get('id')
                         
-                        # Generazione dati PDF
                         pdf_contratto = genera_pdf_tipo(c, "CONTRATTO")
                         pdf_fattura = genera_pdf_tipo(c, "FATTURA")
                         pdf_multe = genera_pdf_tipo(c, "MULTE")
 
-                        # Pulsanti Download
                         col1.download_button("📜 Contratto", pdf_contratto, f"Contratto_{id_c}.pdf", key=f"c_{id_c}")
                         col2.download_button("💰 Ricevuta", pdf_fattura, f"Ricevuta_{id_c}.pdf", key=f"r_{id_c}")
                         col3.download_button("🚨 Multe", pdf_multe, f"Multe_{id_c}.pdf", key=f"m_{id_c}")
 
-                        # --- LOGICA TASTO WHATSAPP ---
+                        # WHATSAPP
                         import urllib.parse
-                        # Messaggio pronto per il cliente
-                        testo_wa = f"Ciao {c.get('nome')}, da Battaglia Rent! 🛵\nTi inviamo il contratto per lo scooter {c.get('targa')}.\nA presto!"
+                        testo_wa = f"Ciao {c.get('nome')}, da Battaglia Rent! 🛵 Ti inviamo i documenti dello scooter {c.get('targa')}."
                         msg_encoded = urllib.parse.quote(testo_wa)
-                        
-                        # Se hai il numero nel database lo usiamo, altrimenti apre WA generico
-                        num_tel = str(c.get('telefono', '')) 
+                        # Prende il numero dal database se esiste
+                        num_tel = str(c.get('telefono', '')).replace(" ", "").replace("+", "")
                         link_wa = f"https://wa.me/{num_tel}?text={msg_encoded}"
-                        
                         col4.link_button("🟢 WhatsApp", link_wa)
 
-                        # --- VISIONE FOTO (Sotto i pulsanti) ---
+                        # FOTO
                         st.write("---")
                         fa, fb = st.columns(2)
                         if c.get("url_fronte"):
                             fa.link_button("👁️ Vedi Fronte", c["url_fronte"])
                         if c.get("url_retro"):
                             fb.link_button("👁️ Vedi Retro", c["url_retro"])
+            else:
+                st.warning("Nessun contratto trovato.")
