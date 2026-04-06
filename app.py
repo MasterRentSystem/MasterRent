@@ -211,19 +211,57 @@ else:
             else:
                 st.error("Compila i campi obbligatori (Nome, Cognome, Targa)")
 
-    # --- ARCHIVIO ---
+  # --- ARCHIVIO ---
     st.divider()
     st.subheader("📂 Archivio Contratti")
+
     try:
+        # Recupera tutti i contratti
         res = supabase.table("contratti").select("*").order("id", desc=True).execute()
+        
         if res.data:
+            # BARRA DI RICERCA INTELLIGENTE
+            search_query = st.text_input("🔍 Cerca (es: Targa + Cognome o Targa + Data)", "").lower()
+
+            # Dividiamo la ricerca in singole parole (es: "AB123CD" e "2024")
+            keywords = search_query.split()
+
+            contratti_filtrati = []
             for c in res.data:
-                with st.expander(f"📄 {c.get('numero_fattura')} - {c.get('nome')} {c.get('cognome')} ({c.get('targa')})"):
-                    c1, c2, c3 = st.columns(3)
-                    id_c = c.get('id')
-                    c1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"Contratto_{id_c}.pdf", key=f"c_{id_c}")
-                    c2.download_button("💰 Ricevuta", genera_pdf_tipo(c, "FATTURA"), f"Ricevuta_{id_c}.pdf", key=f"r_{id_c}")
-                    c3.download_button("🚨 Multe", genera_pdf_tipo(c, "MULTE"), f"Multe_{id_c}.pdf", key=f"m_{id_c}")
-                    if c.get("url_fronte"): st.link_button("👁️ Vedi Fronte", c["url_fronte"])
-                    if c.get("url_retro"): st.link_button("👁️ Vedi Retro", c["url_retro"])
-    except Exception as e: st.error(f"Errore: {e}")
+                # Creiamo una stringa unica con tutti i dati del contratto per questo record
+                dati_contratto = f"{c.get('targa', '')} {c.get('cognome', '')} {c.get('nome', '')} {c.get('inizio', '')} {c.get('numero_fattura', '')}".lower()
+                
+                # Verifichiamo se TUTTE le parole cercate sono presenti in questo contratto
+                if all(key in dati_contratto for key in keywords):
+                    contratti_filtrati.append(c)
+
+            if contratti_filtrati:
+                st.write(f"Contratti trovati: {len(contratti_filtrati)}")
+                for c in contratti_filtrati:
+                    label = f"📝 Ricevuta {c.get('numero_fattura')} | {c.get('targa')} | {c.get('cognome').upper()} | Data: {c.get('inizio')}"
+                    
+                    with st.expander(label):
+                        col1, col2, col3 = st.columns(3)
+                        id_c = c.get('id')
+                        
+                        # --- DOWNLOAD PDF ---
+                        col1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"Contratto_{id_c}.pdf", key=f"c_{id_c}")
+                        col2.download_button("💰 Ricevuta", genera_pdf_tipo(c, "FATTURA"), f"Ricevuta_{id_c}.pdf", key=f"r_{id_c}")
+                        col3.download_button("🚨 Multe", genera_pdf_tipo(c, "MULTE"), f"Multe_{id_c}.pdf", key=f"m_{id_c}")
+                        
+                        # --- VISIONE FOTO ---
+                        st.write("---")
+                        st.markdown("*📸 Documenti d'identità caricati:*")
+                        fa, fb = st.columns(2)
+                        
+                        if c.get("url_fronte"):
+                            fa.link_button("👁️ Vedi Fronte Patente", c["url_fronte"])
+                        if c.get("url_retro"):
+                            fb.link_button("👁️ Vedi Retro Patente", c["url_retro"])
+            else:
+                st.warning("Nessun contratto corrisponde a tutti i termini inseriti.")
+        else:
+            st.info("L'archivio è ancora vuoto.")
+
+    except Exception as e:
+        st.error(f"Errore nel caricamento dell'archivio: {e}")
