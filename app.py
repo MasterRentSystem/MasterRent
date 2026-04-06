@@ -148,7 +148,7 @@ if not st.session_state.autenticato:
             st.error("Password errata")
 else:
     st.title("🛵 Nuovo Noleggio Scooter")
-    with st.form("nuovo_noleggio", clear_on_submit=True):
+ with st.form("nuovo_noleggio", clear_on_submit=True):
         col1, col2 = st.columns(2)
         nome = col1.text_input("Nome")
         cognome = col1.text_input("Cognome")
@@ -177,7 +177,10 @@ else:
         
         canvas = st_canvas(stroke_width=3, stroke_color="#000", background_color="#eee", height=150, width=400, key="firma_nuova")
 
-     if st.form_submit_button("💾 SALVA CONTRATTO"):
+        # IL PULSANTE DEVE ESSERE RIENTRATO RISPETTO A 'with st.form'
+        submit = st.form_submit_button("💾 SALVA CONTRATTO")
+
+        if submit:
             if nome and cognome and targa:
                 try:
                     firma_b64 = ""
@@ -201,15 +204,14 @@ else:
                         "codice_fiscale": cf, "indirizzo_cliente": indirizzo_c, "nazionalita": nazionalita
                     }
                     
-                    # Proviamo a inserire e catturiamo l'errore specifico
-                    res = supabase.table("contratti").insert(dati).execute()
-                    st.success(f"Contratto n° {n_fatt} salvato!")
+                    supabase.table("contratti").insert(dati).execute()
+                    st.success(f"Contratto n° {n_fatt} salvato correttamente!")
                     st.rerun()
                 except Exception as e:
-                    # Questo scriverà l'errore reale sullo schermo dell'app!
-                    st.error(f"ERRORE REALE DA SUPABASE: {str(e)}")
+                    st.error(f"Errore durante il salvataggio: {e}")
             else:
-                st.error("Nome, Cognome e Targa sono obbligatori")
+                st.error("Nome, Cognome e Targa sono obbligatori!")
+
     # --- ARCHIVIO ---
     st.divider()
     st.subheader("📂 Archivio Contratti")
@@ -233,4 +235,4 @@ else:
         else:
             st.info("Nessun contratto in archivio.")
     except Exception as e:
-        st.error(f"Errore caricamento: {e}")
+        st.error(f"Errore caricamento archivio: {e}")
