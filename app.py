@@ -49,11 +49,11 @@ def genera_pdf_base(d, tipo):
     pdf.set_font("Arial", "", 12)
     pdf.ln(10)
     pdf.cell(0, 10, f"Cliente: {d['nome']} {d['cognome']}", ln=True)
-    pdf.cell(0, 10, f"Targa: {d['targa']} | Fattura: {d['numero_fattura']}", ln=True)
-    pdf.cell(0, 10, f"Periodo: {d['inizio']} / {d['fine']}", ln=True)
-    return pdf.output(dest="S").encode("latin-1", "ignore")
-
-# -------------------------
+    pdf.cell(0, 10, f"Targa: {d.get('targa', 'N/D')} | Fattura: {d.get('numero_fattura', 'N/D')}", ln=True)
+    pdf.cell(0, 10, f"Periodo: {d.get('inizio', 'N/D')} / {d.get('fine', 'N/D')}", ln=True)
+    
+    # MODIFICA QUESTA RIGA:
+    return bytes(pdf.output())
 # MENU
 # -------------------------
 menu = st.sidebar.radio("Navigazione", ["Nuovo Noleggio", "Archivio Storico", "Registro Giornaliero"])
