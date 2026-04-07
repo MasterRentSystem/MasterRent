@@ -58,7 +58,7 @@ def upload_foto(file, targa, tipo):
 menu = st.sidebar.radio("Navigazione", ["Nuovo Noleggio", "Archivio Storico", "Registro Giornaliero"])
 
 # -------------------------
-# 1. NUOVO NOLEGGIO (CON ANAGRAFICA COMPLETA)
+# 1. NUOVO NOLEGGIO (AGGIORNATO CON NAZIONALITÀ)
 # -------------------------
 if menu == "Nuovo Noleggio":
     st.header("🛵 Nuovo Noleggio Professionale")
@@ -68,11 +68,17 @@ if menu == "Nuovo Noleggio":
         c1, c2 = st.columns(2)
         nome = c1.text_input("Nome")
         cognome = c2.text_input("Cognome")
-        cod_fisc = c1.text_input("Codice Fiscale")
-        patente = c2.text_input("N. Patente")
+        
+        # --- AGGIUNTA NAZIONALITÀ ---
+        c_naz, c_cf = st.columns(2)
+        nazionalita = c_naz.text_input("Nazionalità", value="Italiana")
+        cod_fisc = c_cf.text_input("Codice Fiscale / ID")
+        
+        patente = c1.text_input("N. Patente")
+        telefono = c2.text_input("Telefono (per WhatsApp)")
+        
         luogo_nas = c1.text_input("Luogo di Nascita")
         data_nas = c2.date_input("Data di Nascita", value=datetime.date(1990,1,1))
-        telefono = st.text_input("Telefono (per WhatsApp)")
 
         st.subheader("🚲 Dati Veicolo e Noleggio")
         c3, c4 = st.columns(2)
@@ -100,24 +106,22 @@ if menu == "Nuovo Noleggio":
                 st.error("Assicurati di inserire Nome, Targa e accettare la Privacy!")
             else:
                 n_fatt = genera_numero_fattura()
-                
-                # Upload Foto
                 url_f = upload_foto(f_fronte, targa, "F")
                 url_r = upload_foto(f_retro, targa, "R")
                 
-                # Dati da salvare
+                # --- DATI CON NAZIONALITÀ ---
                 dati = {
                     "nome": nome, "cognome": cognome, "telefono": telefono, "targa": targa,
                     "inizio": str(inizio), "fine": str(fine), "prezzo": prezzo, "deposito": deposito,
                     "numero_fattura": n_fatt, "codice_fiscale": cod_fisc, "numero_patente": patente,
                     "luogo_nascita": luogo_nas, "data_nascita": str(data_nas),
+                    "nazionalita": nazionalita, # Salvataggio nazionalità
                     "url_fronte": url_f, "url_retro": url_r
                 }
                 
-                # Salvataggio Contratto
                 supabase.table("contratti").insert(dati).execute()
 
-                # Aggiornamento Registro Fiscale
+                # Registro Fiscale
                 oggi = str(datetime.date.today())
                 res_reg = supabase.table("registro_giornaliero").select("*").eq("data", oggi).execute()
                 if res_reg.data:
@@ -128,35 +132,30 @@ if menu == "Nuovo Noleggio":
                     supabase.table("registro_giornaliero").insert({"data": oggi, "numero_noleggi": 1, "totale_incasso": prezzo}).execute()
 
                 st.success(f"Noleggio registrato! Fattura: {n_fatt}")
-                
-                # WhatsApp Rapido
                 msg = urllib.parse.quote(f"Buongiorno {nome}, Battaglia Rent le invia il riepilogo per lo scooter {targa}.\nTotale: €{prezzo}")
                 st.markdown(f"[📲 Invia su WhatsApp](https://wa.me/{telefono}?text={msg})")
 
 # -------------------------
-# 2. ARCHIVIO COMPLETO
+# 2. ARCHIVIO STORICO
 # -------------------------
 elif menu == "Archivio Storico":
     st.header("📂 Archivio Storico")
     cerca = st.text_input("🔍 Cerca per Targa, Cognome o Fattura").lower()
-    
     res = supabase.table("contratti").select("*").order("id", desc=True).execute()
     
     if res.data:
         for c in res.data:
-            stringa_cerca = f"{c['targa']} {c['cognome']} {c['numero_fattura']}".lower()
+            stringa_cerca = f"{c.get('targa','')} {c.get('cognome','')} {c.get('numero_fattura','')}".lower()
             if cerca in stringa_cerca:
                 with st.expander(f"📝 {c['numero_fattura']} | {c['targa']} | {c['cognome'].upper()}"):
-                    st.write(f"*Cliente:* {c['nome']} {c['cognome']} - *Tel:* {c['telefono']}")
-                    st.write(f"*Patente:* {c['numero_patente']} | *Cod. Fiscale:* {c['codice_fiscale']}")
+                    st.write(f"*Cliente:* {c['nome']} {c['cognome']}")
+                    st.write(f"*Nazionalità:* {c.get('nazionalita', 'N/D')} | *Patente:* {c['numero_patente']}")
+                    st.write(f"*Cod. Fiscale:* {c['codice_fiscale']} | *Tel:* {c['telefono']}")
                     
                     st.divider()
-                    # Qui aggiungeremo le funzioni PDF complete se necessario
-                    
                     if c.get("url_fronte"):
                         st.link_button("👁️ Vedi Foto Patente", c["url_fronte"])
                     
-                    # WhatsApp
                     msg_wa = urllib.parse.quote(f"Ciao {c['nome']}, ecco i documenti del tuo noleggio.")
                     st.link_button("🟢 WhatsApp", f"https://wa.me/{str(c['telefono']).replace(' ','')}?text={msg_wa}")
 
