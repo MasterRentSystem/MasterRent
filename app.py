@@ -81,48 +81,45 @@ def aggiorna_registro(prezzo):
 def genera_pdf(d, tipo):
     pdf = FPDF()
     pdf.add_page()
+    
+    # Usiamo un font standard che non dà problemi
     pdf.set_font("Arial", "B", 16)
 
-    # Funzione per pulire il testo da caratteri speciali
     def clean(t):
+        # Gestione sicura del testo per evitare crash
         return str(t).encode("latin-1", "replace").decode("latin-1").replace("?", "-")
 
     if tipo == "MULTE":
-        pdf.cell(200, 10, "DICHIARAZIONE DATI CONDUCENTE (L. 445/2000)", ln=True, align="C")
+        pdf.cell(200, 10, "DICHIARAZIONE DATI CONDUCENTE", ln=True, align="C")
         pdf.ln(10)
         pdf.set_font("Arial", "", 11)
         testo = (
-            f"La sottoscritta Marianna Battaglia dichiara che in data {d.get('inizio')} "
-            f"il veicolo targa {d.get('targa')} era affidato al Sig. "
-            f"{d.get('nome')} {d.get('cognome')} nato a {d.get('luogo_nascita')} "
-            f"il {d.get('data_nascita')} residente in {d.get('residenza')} "
+            f"In data {d.get('inizio')} il veicolo targa {d.get('targa')} "
+            f"era affidato a: {d.get('nome')} {d.get('cognome')}, nato a {d.get('luogo_nascita')} "
+            f"il {d.get('data_nascita')}, residente in {d.get('residenza')}, "
             f"patente n. {d.get('numero_patente')}."
         )
         pdf.multi_cell(0, 10, clean(testo))
 
     elif tipo == "FATTURA":
-        pdf.cell(200, 10, clean(f"RICEVUTA FISCALE N. {d.get('numero_fattura')}"), ln=True, align="C")
+        pdf.cell(200, 10, clean(f"RICEVUTA N. {d.get('numero_fattura')}"), ln=True, align="C")
         pdf.ln(10)
         pdf.set_font("Arial", "", 12)
         pdf.cell(0, 10, clean(f"Cliente: {d.get('nome')} {d.get('cognome')}"), ln=True)
-        pdf.cell(0, 10, clean(f"Codice Fiscale: {d.get('codice_fiscale', '---')}"), ln=True)
         pdf.cell(0, 10, clean(f"Importo: Euro {d.get('prezzo')}"), ln=True)
 
-    else:
-        pdf.cell(200, 10, "CONTRATTO DI NOLEGGIO VEICOLO", ln=True, align="C")
+    else: # CONTRATTO
+        pdf.cell(200, 10, "CONTRATTO DI NOLEGGIO", ln=True, align="C")
         pdf.ln(10)
         pdf.set_font("Arial", "", 11)
         testo = (
             f"Locatario: {d.get('nome')} {d.get('cognome')}\n"
-            f"Nato a: {d.get('luogo_nascita')} il {d.get('data_nascita')}\n"
             f"Targa: {d.get('targa')}\n"
             f"Dal: {d.get('inizio')} Al: {d.get('fine')}\n"
-            f"Prezzo: Euro {d.get('prezzo')}\n"
-            f"Deposito: Euro {d.get('deposito')}"
+            f"Prezzo: Euro {d.get('prezzo')}"
         )
         pdf.multi_cell(0, 10, clean(testo))
         
-        # Aggiunta firma se presente
         if d.get("firma"):
             try:
                 base64_str = d.get("firma").split(",")[-1]
@@ -130,8 +127,8 @@ def genera_pdf(d, tipo):
                 pdf.image(io.BytesIO(img_data), x=130, y=pdf.get_y()+5, w=50)
             except: pass
 
-    return pdf.output(dest="S")
-
+    # RITORNA I BYTES (Questa è la parte fondamentale per l'errore)
+    return bytes(pdf.output(dest='S'), encoding='latin-1', errors='ignore')
 # -------------------------
 # MENU
 # -------------------------
