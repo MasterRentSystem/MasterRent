@@ -142,6 +142,7 @@ menu = st.sidebar.radio("Menu", ["Nuovo Noleggio", "Archivio Storico", "Registro
 # -------------------------
 if menu == "Nuovo Noleggio":
     st.header("🛵 Nuovo Noleggio")
+    
     with st.form("form_noleggio", clear_on_submit=True):
         col1, col2 = st.columns(2)
         nome = col1.text_input("Nome")
@@ -162,11 +163,17 @@ if menu == "Nuovo Noleggio":
         fine = st.date_input("Fine")
 
         st.write("Firma Cliente")
-        canvas = st_canvas(height=150, stroke_width=2, stroke_color="#000", background_color="#eee", key="canvas")
+        canvas = st_canvas(
+            height=150, 
+            stroke_width=2, 
+            stroke_color="#000", 
+            background_color="#eee", 
+            key="canvas"
+        )
 
         submit = st.form_submit_button("SALVA")
 
-       if submit:
+        if submit:
             if not nome or not targa:
                 st.error("Nome e Targa obbligatori")
             else:
@@ -179,11 +186,10 @@ if menu == "Nuovo Noleggio":
                         img.save(buffered, format="PNG")
                         firma_b64 = "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode()
 
-                    # 2. Generazione Numero Fattura
+                    # 2. Numero Fattura
                     numero_fattura = get_next_fattura()
 
-                    # 3. PREPARAZIONE DATI (Assicuriamoci che siano stringhe pulite)
-                    # Usiamo .isoformat() per essere sicuri che la data sia AAAA-MM-GG
+                    # 3. Preparazione Dati
                     dati = {
                         "nome": str(nome),
                         "cognome": str(cognome),
@@ -194,30 +200,29 @@ if menu == "Nuovo Noleggio":
                         "numero_patente": str(patente),
                         "telefono": str(telefono),
                         "targa": str(targa),
-                        "inizio": inizio.isoformat(), # Forza il formato data corretto
-                        "fine": fine.isoformat(),     # Forza il formato data corretto
+                        "inizio": inizio.isoformat(),
+                        "fine": fine.isoformat(),
                         "prezzo": float(prezzo),
                         "deposito": float(deposito),
                         "numero_fattura": str(numero_fattura),
                         "firma": firma_b64
                     }
 
-                    # 4. INVIO A SUPABASE
+                    # 4. Salvataggio
                     supabase.table("contratti").insert(dati).execute()
                     
-                    # 5. AGGIORNAMENTO REGISTRO
+                    # 5. Registro
                     aggiorna_registro(prezzo)
                     
                     st.success(f"Noleggio salvato - Fattura {numero_fattura}")
 
                     if telefono:
-                        # Pulizia numero telefono (rimuove spazi o caratteri extra)
                         tel_clean = ''.join(filter(str.isdigit, str(telefono)))
                         msg = urllib.parse.quote(f"Buongiorno {nome}, Battaglia Rent.\nScooter {targa}\nTotale €{prezzo}")
                         st.markdown(f"[📲 Invia WhatsApp](https://wa.me/{tel_clean}?text={msg})")
                 
                 except Exception as e:
-                    st.error(f"Errore tecnico: {e}")
+                    st.error(f"Errore durante il salvataggio: {e}")
 # -------------------------
 # ARCHIVIO
 # -------------------------
