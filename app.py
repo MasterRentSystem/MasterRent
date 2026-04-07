@@ -220,9 +220,6 @@ if menu == "Nuovo Noleggio":
                 
                 except Exception as e:
                     st.error(f"Errore durante il salvataggio: {e}")
-# -------------------------
-# ARCHIVIO
-# -------------------------
 # Nel menu "Archivio Storico"
 with st.expander(f"{c.get('numero_fattura')} - {c.get('targa')} - {c.get('cognome')}"):
     # Generiamo i dati del PDF prima di passarli al pulsante
@@ -248,10 +245,6 @@ with st.expander(f"{c.get('numero_fattura')} - {c.get('targa')} - {c.get('cognom
         file_name=f"multe_{c['targa']}.pdf",
         mime="application/pdf"
     )
-# -------------------------
-# REGISTRO
-# -------------------------
-elif menu == "Registro Giornaliero":
     st.header("📊 Registro")
     res = supabase.table("registro_giornaliero").select("*").order("data", desc=True).execute()
     if res.data:
