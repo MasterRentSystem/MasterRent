@@ -166,12 +166,12 @@ if menu == "Nuovo Noleggio":
 
         submit = st.form_submit_button("SALVA")
 
-        if submit:
+       if submit:
             if not nome or not targa:
                 st.error("Nome e Targa obbligatori")
             else:
                 try:
-                    # Firma: conversione sicura senza cv2
+                    # 1. Gestione Firma
                     firma_b64 = ""
                     if canvas.image_data is not None:
                         img = Image.fromarray(canvas.image_data.astype(np.uint8))
@@ -179,25 +179,45 @@ if menu == "Nuovo Noleggio":
                         img.save(buffered, format="PNG")
                         firma_b64 = "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode()
 
+                    # 2. Generazione Numero Fattura
                     numero_fattura = get_next_fattura()
+
+                    # 3. PREPARAZIONE DATI (Assicuriamoci che siano stringhe pulite)
+                    # Usiamo .isoformat() per essere sicuri che la data sia AAAA-MM-GG
                     dati = {
-                        "nome": nome, "cognome": cognome, "luogo_nascita": luogo_nas,
-                        "data_nascita": data_nas, "residenza": residenza, "codice_fiscale": cod_fisc,
-                        "numero_patente": patente, "telefono": telefono, "targa": targa,
-                        "inizio": str(inizio), "fine": str(fine), "prezzo": prezzo,
-                        "deposito": deposito, "numero_fattura": numero_fattura, "firma": firma_b64
+                        "nome": str(nome),
+                        "cognome": str(cognome),
+                        "luogo_nascita": str(luogo_nas),
+                        "data_nascita": str(data_nas),
+                        "residenza": str(residenza),
+                        "codice_fiscale": str(cod_fisc),
+                        "numero_patente": str(patente),
+                        "telefono": str(telefono),
+                        "targa": str(targa),
+                        "inizio": inizio.isoformat(), # Forza il formato data corretto
+                        "fine": fine.isoformat(),     # Forza il formato data corretto
+                        "prezzo": float(prezzo),
+                        "deposito": float(deposito),
+                        "numero_fattura": str(numero_fattura),
+                        "firma": firma_b64
                     }
 
+                    # 4. INVIO A SUPABASE
                     supabase.table("contratti").insert(dati).execute()
+                    
+                    # 5. AGGIORNAMENTO REGISTRO
                     aggiorna_registro(prezzo)
+                    
                     st.success(f"Noleggio salvato - Fattura {numero_fattura}")
 
                     if telefono:
+                        # Pulizia numero telefono (rimuove spazi o caratteri extra)
+                        tel_clean = ''.join(filter(str.isdigit, str(telefono)))
                         msg = urllib.parse.quote(f"Buongiorno {nome}, Battaglia Rent.\nScooter {targa}\nTotale €{prezzo}")
-                        st.markdown(f"[📲 Invia WhatsApp](https://wa.me/{telefono}?text={msg})")
+                        st.markdown(f"[📲 Invia WhatsApp](https://wa.me/{tel_clean}?text={msg})")
+                
                 except Exception as e:
-                    st.error(f"Errore salvataggio: {e}")
-
+                    st.error(f"Errore tecnico: {e}")
 # -------------------------
 # ARCHIVIO
 # -------------------------
