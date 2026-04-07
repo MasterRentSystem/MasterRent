@@ -7,7 +7,6 @@ from streamlit_drawable_canvas import st_canvas
 import urllib.parse
 from PIL import Image
 import io
-import os
 
 # -------------------------
 # CONFIGURAZIONE & CONNESSIONE
@@ -36,7 +35,6 @@ if not st.session_state.auth:
 # -------------------------
 # FUNZIONI SUPPORTO
 # -------------------------
-
 def genera_numero_fattura():
     anno = datetime.date.today().year
     try:
@@ -49,7 +47,6 @@ def genera_numero_fattura():
 # -------------------------
 # GENERAZIONE PDF PROFESSIONALI
 # -------------------------
-
 def genera_pdf_documento(d, tipo, firma_img=None):
     pdf = FPDF()
     pdf.add_page()
@@ -61,7 +58,6 @@ def genera_pdf_documento(d, tipo, firma_img=None):
     DURATA = f"dal {d.get('inizio')} al {d.get('fine')}"
 
     if tipo == "CONTRATTO":
-        # INTESTAZIONE
         pdf.set_font("Arial", "B", 16)
         pdf.cell(0, 10, "BATTAGLIA RENT", ln=True)
         pdf.set_font("Arial", "", 9)
@@ -71,17 +67,15 @@ def genera_pdf_documento(d, tipo, firma_img=None):
         pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 10, f"CONTRATTO DI LOCAZIONE N. {d.get('numero_fattura')}", border="TB", ln=True, align="C")
         
-        # DATI CLIENTE
         pdf.ln(5)
         pdf.set_font("Arial", "B", 10)
         pdf.cell(0, 7, "DATI DEL LOCATARIO", ln=True)
         pdf.set_font("Arial", "", 10)
         pdf.multi_cell(0, 6, f"Nome/Cognome: {d.get('nome')} {d.get('cognome')}\n"
-                             f"Nato a: {d.get('luogo_nascita')} il {d.get('data_nascita')} | Nazionalità: {d.get('nazionalita')}\n"
+                             f"Nato a: {d.get('luogo_nascita')} il {d.get('data_nascita')}\n"
                              f"Residente: {d.get('residenza')} | C.F.: {d.get('codice_fiscale')}\n"
                              f"Patente: {d.get('numero_patente')} | Tel: {d.get('telefono')}")
         
-        # DATI VEICOLO
         pdf.ln(5)
         pdf.set_font("Arial", "B", 10)
         pdf.cell(0, 7, "OGGETTO DEL NOLEGGIO", ln=True)
@@ -89,22 +83,20 @@ def genera_pdf_documento(d, tipo, firma_img=None):
         pdf.cell(95, 8, f"Veicolo: {d.get('modello')} Targa: {d.get('targa')}", border=1)
         pdf.cell(95, 8, f"Uscita: {d.get('inizio')} Rientro: {d.get('fine')}", border=1, ln=True)
         
-        # CHECKLIST
         pdf.ln(5)
         pdf.cell(0, 7, f"Benzina alla consegna: {d.get('benzina')} | Deposito: Euro {d.get('deposito')}", ln=True)
         pdf.multi_cell(0, 6, f"Note Danni/Accessori: {d.get('note_danni')}")
         
-        # FIRMA
         pdf.ln(15)
-        y_firma = pdf.get_y()
+        curr_y = pdf.get_y()
         pdf.cell(95, 10, "Firma Titolare", 0, 0, "C")
         pdf.cell(95, 10, "Firma Cliente", 0, 1, "C")
         
         if firma_img:
-            # Salvataggio temporaneo firma
-            img_path = "firma_temp.png"
-            firma_img.save(img_path)
-            pdf.image(img_path, x=130, y=y_firma+5, w=40)
+            img_io = io.BytesIO()
+            firma_img.save(img_io, format='PNG')
+            img_io.seek(0)
+            pdf.image(img_io, x=135, y=curr_y+10, w=40)
         
         pdf.cell(95, 10, "__________________", 0, 0, "C")
         pdf.cell(95, 10, "__________________", 0, 1, "C")
@@ -119,11 +111,10 @@ def genera_pdf_documento(d, tipo, firma_img=None):
         pdf.multi_cell(0, 6, f"La sottoscritta {TITOLARE}, titolare di Battaglia Rent, proprietaria del veicolo {d.get('targa')}, dichiara che in data {d.get('inizio')} il mezzo era affidato a:")
         pdf.ln(5)
         pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 8, f"NOME/COGNOME: {d.get('nome').upper()} {d.get('cognome').upper()}", border="B", ln=True)
+        pdf.cell(0, 8, f"NOME/COGNOME: {str(d.get('nome')).upper()} {str(d.get('cognome')).upper()}", border="B", ln=True)
         pdf.cell(0, 8, f"NATO A: {d.get('luogo_nascita')} IL {d.get('data_nascita')}", border="B", ln=True)
         pdf.cell(0, 8, f"PATENTE N: {d.get('numero_patente')}", border="B", ln=True)
         pdf.ln(10)
-        pdf.set_font("Arial", "", 10)
         pdf.cell(0, 5, "In fede, Marianna Battaglia", ln=True, align="R")
 
     elif tipo == "FATTURA":
@@ -140,17 +131,15 @@ def genera_pdf_documento(d, tipo, firma_img=None):
     return bytes(pdf.output())
 
 # -------------------------
-# NAVIGAZIONE MENU
+# NAVIGAZIONE & INTERFACCIA
 # -------------------------
 menu = st.sidebar.radio("Navigazione", ["Nuovo Noleggio", "Archivio Storico", "Registro Giornaliero"])
 
-# -------------------------
-# 1. NUOVO NOLEGGIO
-# -------------------------
 if menu == "Nuovo Noleggio":
-    st.header("📝 Nuovo Contratto e Firma")
+    st.header("📝 Registrazione Noleggio Professionale")
     
-    with st.form("noleggio_form"):
+    # TUTTO DEVE STARE DENTRO IL FORM
+    with st.form("noleggio_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         nome = c1.text_input("Nome")
         cognome = c2.text_input("Cognome")
@@ -165,7 +154,7 @@ if menu == "Nuovo Noleggio":
         
         st.divider()
         targa = st.text_input("Targa").upper()
-        modello = st.text_input("Modello Scooter (es. Liberty 125)")
+        modello = st.text_input("Modello Scooter")
         
         c5, c6 = st.columns(2)
         prezzo = c5.number_input("Prezzo Totale (€)", min_value=0.0)
@@ -174,47 +163,46 @@ if menu == "Nuovo Noleggio":
         fine = c6.date_input("Fine Noleggio")
         
         benzina = st.selectbox("Livello Benzina", ["Pieno", "1/2", "Riserva"])
-        note_danni = st.text_area("Note Danni e Accessori (es. 2 caschi, graffio scocca)")
+        note_danni = st.text_area("Note Danni e Accessori")
 
-        st.subheader("✍️ Firma Digitale")
+        st.subheader("✍️ Firma Digitale Cliente")
         canvas_result = st_canvas(
             stroke_width=3, stroke_color="#000", background_color="#eee",
-            height=150, update_statusbar=False, key="canvas"
+            height=150, update_statusbar=False, key="canvas_firma"
         )
 
-        submit = st.form_submit_button("💾 SALVA E GENERA TUTTO")
+        # IL PULSANTE DI INVIO DEVE ESSERE L'ULTIMO DENTRO IL FORM
+        submit = st.form_submit_button("💾 SALVA E GENERA CONTRATTO")
 
-        if submit:
-            if not nome or not targa:
-                st.error("Inserisci almeno Nome e Targa!")
-            else:
-                n_fatt = genera_numero_fattura()
-                
-                # Firma
-                firma_pil = None
-                if canvas_result.image_data is not None:
-                    firma_pil = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+    # LOGICA DOPO L'INVIO (FUORI DAL FORM)
+    if submit:
+        if not nome or not targa:
+            st.error("Nome e Targa sono obbligatori!")
+        else:
+            n_fatt = genera_numero_fattura()
+            
+            # Recupero immagine firma
+            firma_pil = None
+            if canvas_result.image_data is not None:
+                firma_pil = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
 
-                dati = {
-                    "nome": nome, "cognome": cognome, "targa": targa, "modello": modello,
-                    "prezzo": prezzo, "deposito": deposito, "inizio": str(inizio), "fine": str(fine),
-                    "codice_fiscale": cod_fisc, "numero_patente": patente, "residenza": residenza,
-                    "nazionalita": nazionalita, "luogo_nascita": luogo_nas, "data_nascita": str(data_nas),
-                    "benzina": benzina, "note_danni": note_danni, "numero_fattura": n_fatt
-                }
-                
-                # Salva su Database
-                supabase.table("contratti").insert(dati).execute()
-                
-                st.success(f"Noleggio registrato con successo! Fattura: {n_fatt}")
-                
-                # Genera PDF per download immediato
-                pdf_firmato = genera_pdf_documento(dati, "CONTRATTO", firma_pil)
-                st.download_button("📥 Scarica Contratto Firmato", pdf_firmato, f"Contratto_{targa}.pdf")
+            dati = {
+                "nome": nome, "cognome": cognome, "targa": targa, "modello": modello,
+                "prezzo": prezzo, "deposito": deposito, "inizio": str(inizio), "fine": str(fine),
+                "codice_fiscale": cod_fisc, "numero_patente": patente, "residenza": residenza,
+                "nazionalita": nazionalita, "luogo_nascita": luogo_nas, "data_nascita": str(data_nas),
+                "benzina": benzina, "note_danni": note_danni, "numero_fattura": n_fatt
+            }
+            
+            # Salvataggio Database
+            supabase.table("contratti").insert(dati).execute()
+            
+            st.success(f"Noleggio registrato! Fattura: {n_fatt}")
+            
+            # Download immediato
+            pdf_firmato = genera_pdf_documento(dati, "CONTRATTO", firma_pil)
+            st.download_button("📥 Scarica Contratto Firmato", pdf_firmato, f"Contratto_{targa}.pdf")
 
-# -------------------------
-# 2. ARCHIVIO
-# -------------------------
 elif menu == "Archivio Storico":
     st.header("📂 Archivio Noleggi")
     cerca = st.text_input("Cerca per targa o cognome").lower()
@@ -229,9 +217,10 @@ elif menu == "Archivio Storico":
                     col2.download_button("💰 Fattura", genera_pdf_documento(c, "FATTURA"), f"Fattura_{c['numero_fattura']}.pdf")
                     col3.download_button("🚨 Modulo Multe", genera_pdf_documento(c, "MULTE"), f"Multe_{c['targa']}.pdf")
 
-# -------------------------
-# 3. REGISTRO
-# -------------------------
 elif menu == "Registro Giornaliero":
-    st.header("📊 Incassi")
-    # Qui puoi aggiungere la logica del registro incassi se necessaria
+    st.header("📊 Registro Incassi")
+    res = supabase.table("contratti").select("inizio, prezzo").execute()
+    if res.data:
+        df = pd.DataFrame(res.data)
+        st.write("Totale incassi registrati:")
+        st.dataframe(df)
