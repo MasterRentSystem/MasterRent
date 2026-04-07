@@ -223,18 +223,31 @@ if menu == "Nuovo Noleggio":
 # -------------------------
 # ARCHIVIO
 # -------------------------
-elif menu == "Archivio Storico":
-    st.header("📂 Archivio")
-    cerca = st.text_input("Cerca").lower()
-    res = supabase.table("contratti").select("*").order("id", desc=True).execute()
-    for c in res.data:
-        testo = f"{c.get('targa')} {c.get('cognome')} {c.get('numero_fattura')}".lower()
-        if cerca in testo:
-            with st.expander(f"{c.get('numero_fattura')} - {c.get('targa')} - {c.get('cognome')}"):
-                st.download_button("📜 Contratto", genera_pdf(c, "CONTRATTO"), file_name=f"contratto_{c['targa']}.pdf")
-                st.download_button("💰 Ricevuta", genera_pdf(c, "FATTURA"), file_name=f"ricevuta_{c['numero_fattura']}.pdf")
-                st.download_button("🚨 Multe", genera_pdf(c, "MULTE"), file_name=f"multe_{c['targa']}.pdf")
+# Nel menu "Archivio Storico"
+with st.expander(f"{c.get('numero_fattura')} - {c.get('targa')} - {c.get('cognome')}"):
+    # Generiamo i dati del PDF prima di passarli al pulsante
+    pdf_contratto = genera_pdf(c, "CONTRATTO")
+    pdf_ricevuta = genera_pdf(c, "FATTURA")
+    pdf_multe = genera_pdf(c, "MULTE")
 
+    st.download_button(
+        label="📜 Contratto",
+        data=pdf_contratto,
+        file_name=f"contratto_{c['targa']}.pdf",
+        mime="application/pdf"
+    )
+    st.download_button(
+        label="💰 Ricevuta",
+        data=pdf_ricevuta,
+        file_name=f"ricevuta_{c['numero_fattura']}.pdf",
+        mime="application/pdf"
+    )
+    st.download_button(
+        label="🚨 Multe",
+        data=pdf_multe,
+        file_name=f"multe_{c['targa']}.pdf",
+        mime="application/pdf"
+    )
 # -------------------------
 # REGISTRO
 # -------------------------
