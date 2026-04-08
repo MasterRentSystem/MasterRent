@@ -55,6 +55,7 @@ def genera_pdf(d, tipo):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 14)
+    
     def clean(text):
         return str(text).encode('latin-1', 'replace').decode('latin-1').replace('?', '-')
 
@@ -68,13 +69,16 @@ def genera_pdf(d, tipo):
                  f"Patente: {d.get('numero_patente')}\n\n"
                  f"Veicolo: {d.get('targa')}\n"
                  f"Dal: {d.get('inizio')} Al: {d.get('fine')}\n"
-                 f"Prezzo: Euro {d.get('prezzo')}")
+                 f"Prezzo: Euro {d.get('prezzo')}\n\n"
+                 f"Privacy e Condizioni: ACCETTATE")
         pdf.multi_cell(0, 8, clean(testo))
     elif tipo == "FATTURA":
         pdf.cell(0, 10, clean(f"Ricevuta N. {d.get('numero_fattura')}"), ln=True, align="C")
         pdf.ln(10)
         pdf.cell(0, 10, clean(f"Cliente: {d.get('nome')} {d.get('cognome')} - Euro {d.get('prezzo')}"), ln=True)
-    return pdf.output(dest="S").encode("latin-1", "ignore") if isinstance(pdf.output(dest="S"), str) else pdf.output(dest="S")
+    
+    # Restituisce i bytes del PDF in modo pulito
+    return bytes(pdf.output(dest="S"))
 
 # -------------------------
 # INTERFACCIA
@@ -90,7 +94,6 @@ if menu == "Nuovo Noleggio":
         nome = c1.text_input("Nome")
         cognome = c2.text_input("Cognome")
         luogo_nascita = c1.text_input("Luogo di Nascita")
-        # TRASFORMATO IN DATE_INPUT PER EVITARE ERRORI DI SCRITTURA
         data_nascita = c2.date_input("Data di Nascita", min_value=datetime.date(1930, 1, 1))
         residenza = c1.text_input("Residenza")
         codice_fiscale = c2.text_input("Codice Fiscale")
@@ -137,43 +140,45 @@ if menu == "Nuovo Noleggio":
                         firma_b64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
                     dati = {
-                        "nome": nome,
-                        "cognome": cognome,
-                        "luogo_nascita": luogo_nascita,
-                        "data_nascita": data_nascita.isoformat(), # FORMATO DATA SICURO
-                        "residenza": residenza,
-                        "codice_fiscale": codice_fiscale,
-                        "numero_patente": numero_patente,
-                        "telefono": telefono,
-                        "targa": targa,
-                        "prezzo": prezzo,
-                        "deposito": deposito,
-                        "numero_fattura": get_next_fattura(),
-                        "inizio": inizio.isoformat(),
-                        "fine": fine.isoformat(),
-                        "firma": firma_b64,
-                        "url_fronte": url_fronte,
-                        "url_retro": url_retro
+                        "nome": nome, "cognome": cognome, "luogo_nascita": luogo_nascita, "data_nascita": data_nascita.isoformat(),
+                        "residenza": residenza, "codice_fiscale": codice_fiscale, "numero_patente": numero_patente,
+                        "telefono": telefono, "targa": targa, "prezzo": prezzo, "deposito": deposito,
+                        "numero_fattura": get_next_fattura(), "inizio": inizio.isoformat(), "fine": fine.isoformat(),
+                        "firma": firma_b64, "url_fronte": url_fronte, "url_retro": url_retro
                     }
                     
                     try:
                         supabase.table("contratti").insert(dati).execute()
-                        st.success(f"✅ Noleggio salvato! Fattura: {dati['numero_fattura']}")
+                        st.success(f"✅ Noleggio salvato!")
                     except Exception as e:
                         st.error(f"❌ Errore Database: {e}")
 
 elif menu == "Archivio":
     st.header("📂 Archivio")
     cerca = st.text_input("🔍 Cerca Targa o Cognome").lower()
+    
     res = supabase.table("contratti").select("*").order("id", desc=True).execute()
+    
     if res.data:
         for c in res.data:
             if cerca in f"{c.get('targa','')} {c.get('cognome','')}".lower():
                 with st.expander(f"{c.get('numero_fattura')} - {c.get('targa')} - {c.get('cognome')}"):
                     col1, col2 = st.columns(2)
-                    with col1:
-                        st.download_button("📜 Contratto", genera_pdf(c, "CONTRATTO"), f"Cont_{c['targa']}.pdf", "application/pdf")
-                        st.download_button("💰 Ricevuta", genera_pdf(c, "FATTURA"), f"Ric_{c['numero_fattura']}.pdf", "application/pdf")
-                    with col2:
-                        if c.get('url_fronte'): st.link_button("🖼️ Patente Fronte", c['url_fronte'])
-                        if c.get('url_retro'): st.link_button("🖼️ Patente Retro", c['url_retro'])
+                    
+                    # Generiamo i PDF una sola volta per espansione
+                    try:
+                        pdf_contratto = genera_pdf(c, "CONTRATTO")
+                        pdf_ricevuta = genera_pdf(c, "FATTURA")
+                        
+                        with col1:
+                            st.download_button("📜 Scarica Contratto", data=pdf_contratto, file_name=f"Contratto_{c['targa']}.pdf", mime="application/pdf")
+                        with col2:
+                            st.download_button("💰 Scarica Ricevuta", data=pdf_ricevuta, file_name=f"Ricevuta_{c['numero_fattura']}.pdf", mime="application/pdf")
+                        
+                        st.divider()
+                        if c.get('url_fronte'): st.link_button("🖼️ Vedi Patente Fronte", c['url_fronte'])
+                        if c.get('url_retro'): st.link_button("🖼️ Vedi Patente Retro", c['url_retro'])
+                    except Exception as e:
+                        st.error(f"Errore generazione documenti: {e}")
+    else:
+        st.info("Nessun dato in archivio.")
