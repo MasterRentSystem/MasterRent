@@ -138,9 +138,12 @@ def genera_pdf(d, tipo):
         if t is None:
             return ""
 
-        return str(t) \
-            .encode("latin-1", "replace") \
-            .decode("latin-1")
+        return str(t).encode(
+            "latin-1",
+            "replace"
+        ).decode(
+            "latin-1"
+        )
 
     if tipo == "CONTRATTO":
 
@@ -150,18 +153,6 @@ CONTRATTO DI NOLEGGIO
 Cliente:
 {d.get('nome')} {d.get('cognome')}
 
-Nazionalità:
-{d.get('nazionalita')}
-
-Codice Fiscale:
-{d.get('codice_fiscale')}
-
-Patente:
-{d.get('numero_patente')}
-
-Telefono:
-{d.get('telefono')}
-
 Veicolo:
 {d.get('targa')}
 
@@ -170,38 +161,27 @@ Periodo:
 
 Prezzo:
 Euro {d.get('prezzo')}
-
-Il cliente è responsabile per:
-
-•⁠  ⁠danni
-•⁠  ⁠multe
-•⁠  ⁠uso improprio del veicolo
-•⁠  ⁠restituzione in buone condizioni
-
-Autorizza il trattamento dei dati personali.
 """
 
         pdf.multi_cell(0, 8, clean(testo))
 
-    if tipo == "FATTURA":
+    elif tipo == "FATTURA":
 
-        pdf.multi_cell(
-            0,
-            8,
-            clean(
-                f"Ricevuta {d.get('numero_fattura')}\n"
-                f"Cliente: {d.get('nome')} {d.get('cognome')}\n"
-                f"Importo: Euro {d.get('prezzo')}"
-            )
-        )
+        testo = f"""
+Ricevuta {d.get('numero_fattura')}
 
-    if tipo == "MULTE":
+Cliente:
+{d.get('nome')} {d.get('cognome')}
 
-        pdf.multi_cell(
-            0,
-            8,
-            clean(
-                f"""
+Importo:
+Euro {d.get('prezzo')}
+"""
+
+        pdf.multi_cell(0, 8, clean(testo))
+
+    elif tipo == "MULTE":
+
+        testo = f"""
 DICHIARAZIONE DATI CONDUCENTE
 
 Veicolo:
@@ -209,15 +189,11 @@ Veicolo:
 
 Cliente:
 {d.get('nome')} {d.get('cognome')}
-
-Patente:
-{d.get('numero_patente')}
-
-Telefono:
-{d.get('telefono')}
 """
-            )
-        )
+
+        pdf.multi_cell(0, 8, clean(testo))
+
+    # FIX STREAMLIT DEFINITIVO
 
     pdf_bytes = pdf.output(dest="S")
 
@@ -225,8 +201,11 @@ Telefono:
 
         pdf_bytes = pdf_bytes.encode("latin-1")
 
-    return pdf_bytes
+    if not isinstance(pdf_bytes, bytes):
 
+        pdf_bytes = bytes(pdf_bytes)
+
+    return pdf_bytes
 # -------------------------
 # MENU
 # -------------------------
