@@ -73,7 +73,14 @@ def genera_pdf(d, tipo):
         pdf.cell(0, 10, "CONTRATTO DI NOLEGGIO SCOOTER", ln=True, align="C")
         pdf.ln(10)
         pdf.set_font("Arial", "", 11)
-        testo = f"Cliente: {d.get('nome')} {d.get('cognome')}\nCF: {d.get('codice_fiscale')}\nPatente: {d.get('numero_patente')}\n\nVeicolo: {d.get('targa')}\nPeriodo: {d.get('inizio')} - {d.get('fine')}\nPrezzo: Euro {d.get('prezzo')}"
+        testo = (f"Locatario: {d.get('nome')} {d.get('cognome')}\n"
+                 f"Nato a: {d.get('luogo_nascita')} il {d.get('data_nascita')}\n"
+                 f"Residente in: {d.get('residenza')}\n"
+                 f"CF: {d.get('codice_fiscale')}\n"
+                 f"Patente: {d.get('numero_patente')}\n\n"
+                 f"Veicolo: {d.get('targa')}\n"
+                 f"Periodo: {d.get('inizio')} - {d.get('fine')}\n"
+                 f"Prezzo: Euro {d.get('prezzo')}")
         pdf.multi_cell(0, 8, clean(testo))
     elif tipo == "FATTURA":
         pdf.cell(0, 10, clean(f"Ricevuta N. {d.get('numero_fattura')}"), ln=True, align="C")
@@ -97,51 +104,48 @@ if menu == "Nuovo Noleggio":
     st.header("🛵 Nuovo Noleggio")
     
     with st.form("form_principale", clear_on_submit=True):
-        st.subheader("Dati Cliente")
+        st.subheader("Anagrafica Cliente")
         c1, c2 = st.columns(2)
         nome = c1.text_input("Nome")
         cognome = c2.text_input("Cognome")
-        cf = c1.text_input("Codice Fiscale")
-        patente = c2.text_input("Numero Patente")
+        luogo_nas = c1.text_input("Luogo di Nascita")
+        data_nas = c2.text_input("Data di Nascita (GG/MM/AAAA)")
+        residenza = c1.text_input("Residenza")
+        cf = c2.text_input("Codice Fiscale")
+        patente = c1.text_input("Numero Patente")
+        telefono = c2.text_input("Telefono")
         
         st.subheader("Dati Noleggio")
         c3, c4 = st.columns(2)
         targa = c3.text_input("Targa").upper()
         prezzo = c4.number_input("Prezzo Totale (€)", min_value=0.0)
+        deposito = c3.number_input("Deposito (€)", min_value=0.0)
         inizio = c3.date_input("Data Inizio")
         fine = c4.date_input("Data Fine")
         
         st.divider()
         st.subheader("Documenti (Foto)")
-        # CAMPI FOTO BEN VISIBILI
         foto_fronte = st.file_uploader("📸 FOTO PATENTE FRONTE", type=['png', 'jpg', 'jpeg'])
         foto_retro = st.file_uploader("📸 FOTO PATENTE RETRO", type=['png', 'jpg', 'jpeg'])
         foto_privacy = st.file_uploader("📄 PRIVACY FIRMATA", type=['png', 'jpg', 'jpeg', 'pdf'])
         
         st.divider()
-        st.subheader("Firma del Cliente")
-        canvas = st_canvas(
-            height=200,
-            stroke_width=3,
-            stroke_color="#000000",
-            background_color="#ffffff",
-            update_streamlit=True,
-            key="canvas_firma"
-        )
+        st.subheader("Firma")
+        canvas = st_canvas(height=180, stroke_width=3, stroke_color="#000", background_color="#fff", key="canvas_firma")
 
-        submit = st.form_submit_button("💾 SALVA NOLEGGIO E DOCUMENTI")
+        submit = st.form_submit_button("💾 SALVA TUTTO")
 
         if submit:
             if not nome or not targa:
-                st.error("⚠️ Attenzione: Nome e Targa sono obbligatori!")
+                st.error("⚠️ Nome e Targa obbligatori!")
             else:
-                with st.spinner("Salvataggio in corso..."):
-                    # 1. Caricamento Foto su Supabase
+                with st.spinner("Salvataggio..."):
+                    # Caricamento file
                     url_f = upload_file(foto_fronte, targa, "fronte")
                     url_r = upload_file(foto_retro, targa, "retro")
                     url_p = upload_file(foto_privacy, targa, "privacy")
 
-                    # 2. Elaborazione Firma
+                    # Firma
                     firma_b64 = ""
                     if canvas.image_data is not None:
                         img_firma = Image.fromarray(canvas.image_data.astype("uint8"))
@@ -149,58 +153,41 @@ if menu == "Nuovo Noleggio":
                         img_firma.save(buffered, format="PNG")
                         firma_b64 = "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode()
 
-                    # 3. Preparazione Dati
-                    dati_noleggio = {
-                        "nome": nome,
-                        "cognome": cognome,
-                        "codice_fiscale": cf,
-                        "numero_patente": patente,
-                        "targa": targa,
-                        "prezzo": prezzo,
-                        "numero_fattura": get_next_fattura(),
-                        "inizio": inizio.isoformat(), # FIX ERRORE DATA "4545"
-                        "fine": fine.isoformat(),
-                        "firma": firma_b64,
-                        "url_fronte": url_f,
-                        "url_retro": url_r,
-                        "url_privacy": url_p
+                    # Preparazione Dati
+                    dati = {
+                        "nome": nome, "cognome": cognome, "luogo_nascita": luogo_nas, "data_nascita": data_nas,
+                        "residenza": residenza, "codice_fiscale": cf, "numero_patente": patente,
+                        "telefono": telefono, "targa": targa, "prezzo": prezzo, "deposito": deposito,
+                        "numero_fattura": get_next_fattura(), "inizio": inizio.isoformat(), "fine": fine.isoformat(),
+                        "firma": firma_b64, "url_fronte": url_f, "url_retro": url_r, "url_privacy": url_p
                     }
                     
                     try:
-                        supabase.table("contratti").insert(dati_noleggio).execute()
-                        st.success(f"✅ Noleggio salvato! Fattura: {dati_noleggio['numero_fattura']}")
-                        st.balloons()
+                        supabase.table("contratti").insert(dati).execute()
+                        st.success(f"✅ Salvato! Fattura: {dati['numero_fattura']}")
                     except Exception as e:
-                        st.error(f"❌ Errore durante il salvataggio: {e}")
+                        # Se l'errore riguarda le colonne mancanti, riprova senza quelle colonne
+                        if "url_privacy" in str(e) or "column" in str(e):
+                            st.warning("Nota: Le foto sono state caricate nello Storage ma non collegate al database (colonne mancanti). Salvo i dati anagrafici...")
+                            dati_ridotti = {k: v for k, v in dati.items() if not k.startswith("url_")}
+                            supabase.table("contratti").insert(dati_ridotti).execute()
+                            st.success(f"✅ Dati anagrafici salvati! Fattura: {dati['numero_fattura']}")
+                        else:
+                            st.error(f"❌ Errore: {e}")
 
 elif menu == "Archivio":
-    st.header("📂 Archivio Storico")
+    st.header("📂 Archivio")
     cerca = st.text_input("🔍 Cerca per Cognome o Targa").lower()
-    
-    try:
-        res = supabase.table("contratti").select("*").order("id", desc=True).execute()
-        if res.data:
-            for c in res.data:
-                info_testo = f"{c['targa']} {c['cognome']}".lower()
-                if cerca in info_testo:
-                    with st.expander(f"📄 {c['numero_fattura']} - {c['targa']} - {c['cognome']}"):
-                        col_pdf, col_img = st.columns(2)
-                        
-                        with col_pdf:
-                            st.write("*Documenti PDF*")
-                            st.download_button("📜 Contratto", genera_pdf(c, "CONTRATTO"), f"Contratto_{c['targa']}.pdf", "application/pdf")
-                            st.download_button("💰 Ricevuta", genera_pdf(c, "FATTURA"), f"Ricevuta_{c['numero_fattura']}.pdf", "application/pdf")
-                            st.download_button("🚨 Modulo Multe", genera_pdf(c, "MULTE"), f"Multe_{c['targa']}.pdf", "application/pdf")
-                        
-                        with col_img:
-                            st.write("*Allegati Fotografici*")
-                            if c.get('url_fronte'):
-                                st.link_button("🖼️ Vedi Patente Fronte", c['url_fronte'])
-                            if c.get('url_retro'):
-                                st.link_button("🖼️ Vedi Patente Retro", c['url_retro'])
-                            if c.get('url_privacy'):
-                                st.link_button("📄 Vedi Privacy", c['url_privacy'])
-        else:
-            st.info("Nessun noleggio trovato.")
-    except Exception as e:
-        st.error(f"Errore caricamento archivio: {e}")
+    res = supabase.table("contratti").select("*").order("id", desc=True).execute()
+    if res.data:
+        for c in res.data:
+            if cerca in f"{c.get('targa','')} {c.get('cognome','')}".lower():
+                with st.expander(f"{c.get('numero_fattura')} - {c.get('targa')} - {c.get('cognome')}"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.download_button("📜 Contratto", genera_pdf(c, "CONTRATTO"), f"Contratto_{c['targa']}.pdf", "application/pdf")
+                        st.download_button("🚨 Multe", genera_pdf(c, "MULTE"), f"Multe_{c['targa']}.pdf", "application/pdf")
+                    with col2:
+                        st.download_button("💰 Ricevuta", genera_pdf(c, "FATTURA"), f"Ricevuta_{c['numero_fattura']}.pdf", "application/pdf")
+                        if c.get('url_fronte'): st.link_button("🖼️ Foto Fronte", c['url_fronte'])
+                        if c.get('url_retro'): st.link_button("🖼️ Foto Retro", c['url_retro'])
