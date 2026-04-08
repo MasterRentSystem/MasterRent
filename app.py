@@ -1,5 +1,6 @@
 import streamlit as st
 import datetime
+import pandas as pd
 from supabase import create_client, Client
 from fpdf import FPDF
 import base64
@@ -10,7 +11,7 @@ import io
 st.set_page_config(page_title="Rent Scooter", layout="centered")
 
 # -------------------------
-# SUPABASE
+# CONNESSIONE SUPABASE
 # -------------------------
 
 url = st.secrets["SUPABASE_URL"]
@@ -123,13 +124,14 @@ def upload_file(file, targa, tipo):
         return None
 
 # -------------------------
-# PDF
+# GENERA PDF
 # -------------------------
 
 def genera_pdf(d, tipo):
 
     pdf = FPDF()
     pdf.add_page()
+    pdf.set_font("Arial", size=11)
 
     def clean(t):
 
@@ -137,15 +139,8 @@ def genera_pdf(d, tipo):
             return ""
 
         return str(t) \
-            .encode(
-                "latin-1",
-                "replace"
-            ) \
-            .decode(
-                "latin-1"
-            )
-
-    pdf.set_font("Arial", size=11)
+            .encode("latin-1", "replace") \
+            .decode("latin-1")
 
     if tipo == "CONTRATTO":
 
@@ -183,8 +178,7 @@ Il cliente è responsabile per:
 •⁠  ⁠uso improprio del veicolo
 •⁠  ⁠restituzione in buone condizioni
 
-Il cliente autorizza il trattamento dei dati personali
-ai sensi del GDPR.
+Autorizza il trattamento dei dati personali.
 """
 
         pdf.multi_cell(0, 8, clean(testo))
@@ -216,9 +210,6 @@ Veicolo:
 Cliente:
 {d.get('nome')} {d.get('cognome')}
 
-Nazionalità:
-{d.get('nazionalita')}
-
 Patente:
 {d.get('numero_patente')}
 
@@ -246,7 +237,9 @@ menu = st.sidebar.radio(
 
     [
         "Nuovo Noleggio",
-        "Archivio"
+        "Archivio",
+        "Report Guadagni",
+        "Backup"
     ]
 
 )
@@ -259,10 +252,7 @@ if menu == "Nuovo Noleggio":
 
     st.header("Nuovo Noleggio")
 
-    with st.form(
-        "form",
-        clear_on_submit=True
-    ):
+    with st.form("form", clear_on_submit=True):
 
         nome = st.text_input("Nome")
         cognome = st.text_input("Cognome")
@@ -288,50 +278,24 @@ if menu == "Nuovo Noleggio":
             "Foto patente retro"
         )
 
-        privacy_file = st.file_uploader(
-            "Foto informativa privacy firmata"
-        )
+        st.subheader("Privacy e Clausole")
 
-        # -------------------------
-        # PRIVACY E CLAUSOLE
-        # -------------------------
-
-        st.subheader("Informativa Privacy e Clausole")
-
-        privacy_text = """
-INFORMATIVA PRIVACY
-
-Il cliente autorizza il trattamento dei dati personali
-per finalità amministrative e di sicurezza.
-
-CLAUSOLE
-
+        st.text_area(
+            "Leggere prima di firmare",
+            """
 Il cliente dichiara:
 
 •⁠  ⁠di avere patente valida
 •⁠  ⁠di essere responsabile per danni
 •⁠  ⁠di essere responsabile per multe
-•⁠  ⁠di restituire il veicolo in buone condizioni
 •⁠  ⁠di accettare le condizioni contrattuali
-"""
-
-        st.text_area(
-
-            "Leggere prima di firmare",
-
-            privacy_text,
-
-            height=250
-
+""",
+            height=200
         )
 
         accetta = st.checkbox(
             "Accetto privacy e clausole"
         )
-
-        # -------------------------
-        # FIRMA
-        # -------------------------
 
         st.write("Firma Cliente")
 
@@ -353,14 +317,6 @@ Il cliente dichiara:
 
                 st.stop()
 
-            if canvas.image_data is None:
-
-                st.error(
-                    "Firma obbligatoria"
-                )
-
-                st.stop()
-
             numero_fattura = get_next_fattura()
 
             url_fronte = upload_file(
@@ -373,12 +329,6 @@ Il cliente dichiara:
                 patente_retro,
                 targa,
                 "retro"
-            )
-
-            url_privacy = upload_file(
-                privacy_file,
-                targa,
-                "privacy"
             )
 
             img = Image.fromarray(
@@ -394,11 +344,9 @@ Il cliente dichiara:
                 format="PNG"
             )
 
-            firma_b64 = (
-                base64.b64encode(
-                    buffer.getvalue()
-                ).decode()
-            )
+            firma_b64 = base64.b64encode(
+                buffer.getvalue()
+            ).decode()
 
             dati = {
 
@@ -415,8 +363,7 @@ Il cliente dichiara:
                 "numero_fattura": numero_fattura,
                 "firma": firma_b64,
                 "url_fronte": url_fronte,
-                "url_retro": url_retro,
-                "url_privacy": url_privacy
+                "url_retro": url_retro
 
             }
 
@@ -431,7 +378,7 @@ Il cliente dichiara:
             )
 
 # -------------------------
-# ARCHIVIO
+# ARCHIVIO + RICERCA VELOCE
 # -------------------------
 
 elif menu == "Archivio":
@@ -439,7 +386,7 @@ elif menu == "Archivio":
     st.header("Archivio")
 
     cerca = st.text_input(
-        "Cerca targa o nome"
+        "Ricerca veloce targa o data"
     ).lower()
 
     res = supabase.table(
@@ -454,7 +401,7 @@ elif menu == "Archivio":
 
             testo = (
                 f"{c.get('targa')} "
-                f"{c.get('cognome')}"
+                f"{c.get('inizio')}"
             ).lower()
 
             if cerca in testo:
@@ -490,3 +437,61 @@ elif menu == "Archivio":
                         ),
                         file_name="multe.pdf"
                     )
+
+# -------------------------
+# REPORT GUADAGNI
+# -------------------------
+
+elif menu == "Report Guadagni":
+
+    st.header("Guadagni Mensili")
+
+    res = supabase.table(
+        "contratti"
+    ).select("prezzo, inizio") \
+     .execute()
+
+    if res.data:
+
+        df = pd.DataFrame(res.data)
+
+        df["inizio"] = pd.to_datetime(
+            df["inizio"]
+        )
+
+        df["mese"] = df["inizio"] \
+            .dt.to_period("M")
+
+        report = df.groupby(
+            "mese"
+        )["prezzo"].sum()
+
+        st.write(report)
+
+# -------------------------
+# BACKUP
+# -------------------------
+
+elif menu == "Backup":
+
+    st.header("Backup Dati")
+
+    res = supabase.table(
+        "contratti"
+    ).select("*") \
+     .execute()
+
+    if res.data:
+
+        df = pd.DataFrame(res.data)
+
+        csv = df.to_csv(
+            index=False
+        )
+
+        st.download_button(
+            "Scarica Backup CSV",
+            csv,
+            file_name="backup_contratti.csv"
+        )
+        
