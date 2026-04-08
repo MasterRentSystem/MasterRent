@@ -5,12 +5,11 @@ from supabase import create_client, Client
 from fpdf import FPDF
 import base64
 from streamlit_drawable_canvas import st_canvas
-import urllib.parse
 from PIL import Image
 import io
 
 # -------------------------
-# CONFIGURAZIONE
+# CONFIGURAZIONE & CONNESSIONE
 # -------------------------
 st.set_page_config(page_title="Battaglia Rent", layout="centered")
 
@@ -18,14 +17,10 @@ url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
-# -------------------------
-# LOGIN
-# -------------------------
 def check_password():
-    if "auth" not in st.session_state:
-        st.session_state.auth = False
+    if "auth" not in st.session_state: st.session_state.auth = False
     if not st.session_state.auth:
-        st.title("🔒 Accesso Riservato")
+        st.title("🔒 Accesso")
         pwd = st.text_input("Password", type="password")
         if pwd == st.secrets["APP_PASSWORD"]:
             st.session_state.auth = True
@@ -33,11 +28,10 @@ def check_password():
         return False
     return True
 
-if not check_password():
-    st.stop()
+if not check_password(): st.stop()
 
 # -------------------------
-# UTILITY
+# FUNZIONI UTILITY
 # -------------------------
 def get_next_fattura():
     year = datetime.date.today().year
@@ -74,18 +68,16 @@ def genera_pdf(d, tipo):
                  f"Patente: {d.get('numero_patente')}\n\n"
                  f"Veicolo: {d.get('targa')}\n"
                  f"Dal: {d.get('inizio')} Al: {d.get('fine')}\n"
-                 f"Prezzo: Euro {d.get('prezzo')}\n\n"
-                 f"Privacy e Clausole: ACCETTATE")
+                 f"Prezzo: Euro {d.get('prezzo')}")
         pdf.multi_cell(0, 8, clean(testo))
     elif tipo == "FATTURA":
         pdf.cell(0, 10, clean(f"Ricevuta N. {d.get('numero_fattura')}"), ln=True, align="C")
         pdf.ln(10)
         pdf.cell(0, 10, clean(f"Cliente: {d.get('nome')} {d.get('cognome')} - Euro {d.get('prezzo')}"), ln=True)
-    
     return pdf.output(dest="S").encode("latin-1", "ignore") if isinstance(pdf.output(dest="S"), str) else pdf.output(dest="S")
 
 # -------------------------
-# MENU
+# INTERFACCIA
 # -------------------------
 menu = st.sidebar.radio("Menu", ["Nuovo Noleggio", "Archivio"])
 
@@ -98,7 +90,8 @@ if menu == "Nuovo Noleggio":
         nome = c1.text_input("Nome")
         cognome = c2.text_input("Cognome")
         luogo_nascita = c1.text_input("Luogo di Nascita")
-        data_nascita = c2.text_input("Data di Nascita (GG/MM/AAAA)")
+        # TRASFORMATO IN DATE_INPUT PER EVITARE ERRORI DI SCRITTURA
+        data_nascita = c2.date_input("Data di Nascita", min_value=datetime.date(1930, 1, 1))
         residenza = c1.text_input("Residenza")
         codice_fiscale = c2.text_input("Codice Fiscale")
         numero_patente = c1.text_input("Numero Patente")
@@ -109,8 +102,8 @@ if menu == "Nuovo Noleggio":
         targa = c3.text_input("Targa").upper()
         prezzo = c4.number_input("Prezzo (€)", min_value=0.0)
         deposito = c3.number_input("Deposito (€)", min_value=0.0)
-        inizio = c3.date_input("Inizio")
-        fine = c4.date_input("Fine")
+        inizio = c3.date_input("Inizio Noleggio")
+        fine = c4.date_input("Fine Noleggio")
         
         st.divider()
         st.subheader("Foto Documenti")
@@ -119,9 +112,8 @@ if menu == "Nuovo Noleggio":
         
         st.divider()
         st.subheader("Consensi e Firma")
-        # CHECKBOX RICHIESTI
         check_privacy = st.checkbox("Accetto Informativa Privacy")
-        check_clausole = st.checkbox("Accetto Condizioni Contrattuali e Responsabilità")
+        check_clausole = st.checkbox("Accetto Condizioni Contrattuali")
         
         canvas = st_canvas(height=180, stroke_width=3, stroke_color="#000", background_color="#fff", key="canvas_firma")
 
@@ -134,11 +126,9 @@ if menu == "Nuovo Noleggio":
                 st.error("⚠️ Devi accettare Privacy e Condizioni!")
             else:
                 with st.spinner("Salvataggio..."):
-                    # Caricamento foto (usando i tuoi nomi di funzione)
                     url_fronte = upload_file(patente_fronte, targa, "fronte")
                     url_retro = upload_file(patente_retro, targa, "retro")
                     
-                    # Firma
                     firma_b64 = ""
                     if canvas.image_data is not None:
                         img_f = Image.fromarray(canvas.image_data.astype("uint8"))
@@ -146,12 +136,11 @@ if menu == "Nuovo Noleggio":
                         img_f.save(buf, format="PNG")
                         firma_b64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
-                    # DATI CON I NOMI COLONNA ORIGINALI
                     dati = {
                         "nome": nome,
                         "cognome": cognome,
                         "luogo_nascita": luogo_nascita,
-                        "data_nascita": data_nascita,
+                        "data_nascita": data_nascita.isoformat(), # FORMATO DATA SICURO
                         "residenza": residenza,
                         "codice_fiscale": codice_fiscale,
                         "numero_patente": numero_patente,
