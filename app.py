@@ -151,7 +151,7 @@ if not st.session_state.autenticato:
         else: st.error("Password errata")
 else:
     st.title("🛵 Nuovo Noleggio Scooter")
-    with st.form("nuovo_noleggio", clear_on_submit=True):
+   with st.form("nuovo_noleggio", clear_on_submit=True):
         col1, col2 = st.columns(2)
         nome = col1.text_input("Nome")
         cognome = col1.text_input("Cognome")
@@ -170,15 +170,15 @@ else:
         inizio = d1.date_input("Inizio Noleggio")
         fine = d2.date_input("Fine Noleggio")
 
-       st.subheader("📸 Documenti")
+        st.subheader("📸 Documenti")
         f1, f2 = st.columns(2)
         fronte = f1.file_uploader("Fronte Patente", type=["jpg", "png", "jpeg"])
         retro = f2.file_uploader("Retro Patente", type=["jpg", "png", "jpeg"])
 
         st.subheader("⚖️ Note Legali e Privacy")
-        st.info("Dichiaro di aver preso visione delle condizioni di noleggio e di assumermi ogni responsabilità civile e penale per danni o infrazioni. Autorizzo la ditta a conservare le foto dei miei documenti per fini di legge.")
+        st.info("Dichiaro di aver preso visione delle condizioni di noleggio...")
         check_condizioni = st.checkbox("Accetto le Condizioni di Noleggio")
-        check_privacy = st.checkbox("Accetto l'Informativa Privacy e conservazione foto documenti")
+        check_privacy = st.checkbox("Accetto l'Informativa Privacy")
 
         st.subheader("✍️ Firma")
         canvas = st_canvas(stroke_width=3, stroke_color="#000", background_color="#eee", height=150, width=400, key="firma")
@@ -211,8 +211,8 @@ else:
                     st.success(f"Contratto n° {n_f} salvato con successo!")
                     st.rerun()
                 except Exception as e:
-                    # Finalmente vedremo il vero errore qui!
-                    st.error(f"⚠️ ERRORE DA SUPABASE: {str(e)}")
+                    # Questo ci mostrerà FINALMENTE il vero motivo dell'errore (es. colonna mancante)
+                    st.error(f"⚠️ ERRORE SUPABASE: {str(e)}")
             else:
                 st.error("Compila i campi obbligatori (Nome, Cognome, Targa)")
  # --- ARCHIVIO ---
