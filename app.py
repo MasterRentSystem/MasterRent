@@ -150,8 +150,9 @@ if not st.session_state.autenticato:
             st.rerun()
         else: st.error("Password errata")
 else:
+   else:
     st.title("🛵 Nuovo Noleggio Scooter")
-   with st.form("nuovo_noleggio", clear_on_submit=True):
+    with st.form("nuovo_noleggio", clear_on_submit=True):
         col1, col2 = st.columns(2)
         nome = col1.text_input("Nome")
         cognome = col1.text_input("Cognome")
@@ -176,7 +177,7 @@ else:
         retro = f2.file_uploader("Retro Patente", type=["jpg", "png", "jpeg"])
 
         st.subheader("⚖️ Note Legali e Privacy")
-        st.info("Dichiaro di aver preso visione delle condizioni di noleggio...")
+        st.info("Dichiaro di aver preso visione delle condizioni di noleggio e di assumermi ogni responsabilità...")
         check_condizioni = st.checkbox("Accetto le Condizioni di Noleggio")
         check_privacy = st.checkbox("Accetto l'Informativa Privacy")
 
@@ -206,73 +207,29 @@ else:
                         "data_nascita": d_nas, "numero_patente": pat, "url_fronte": u_f, 
                         "url_retro": u_r, "codice_fiscale": cf, "indirizzo_cliente": ind, "nazionalita": naz
                     }
-                    
                     supabase.table("contratti").insert(dati).execute()
                     st.success(f"Contratto n° {n_f} salvato con successo!")
                     st.rerun()
                 except Exception as e:
-                    # Questo ci mostrerà FINALMENTE il vero motivo dell'errore (es. colonna mancante)
-                    st.error(f"⚠️ ERRORE SUPABASE: {str(e)}")
+                    # Questo box rosso ci dirà finalmente il VERO errore di Supabase
+                    st.error(f"⚠️ ERRORE DA SUPABASE: {str(e)}")
             else:
                 st.error("Compila i campi obbligatori (Nome, Cognome, Targa)")
- # --- ARCHIVIO ---
+
+    # --- ARCHIVIO ---
     st.divider()
     st.subheader("📂 Archivio Contratti")
-
     try:
-        # Recupera i dati
         res = supabase.table("contratti").select("*").order("id", desc=True).execute()
-        
         if res.data:
-            # Barra di ricerca
-            search_query = st.text_input("🔍 Cerca per Targa, Cognome o Data", "").lower()
-            keywords = search_query.split()
-
-            # Filtro dati
-            contratti_filtrati = []
+            search_query = st.text_input("🔍 Cerca per Targa o Cognome", "").lower()
             for c in res.data:
-                testo_da_cercare = f"{c.get('targa', '')} {c.get('cognome', '')} {c.get('nome', '')} {c.get('inizio', '')}".lower()
-                if all(key in testo_da_cercare for key in keywords):
-                    contratti_filtrati.append(c)
-
-            # Visualizzazione risultati
-            if contratti_filtrati:
-                for c in contratti_filtrati:
-                    label = f"📝 {c.get('targa')} - {c.get('cognome', '').upper()} - {c.get('inizio', '')}"
-                    with st.expander(label):
-                        # Layout pulsanti
-                        col1, col2, col3, col4 = st.columns(4)
-                        id_c = c.get('id')
-                        
-                        # Generazione PDF
-                        pdf_contratto = genera_pdf_tipo(c, "CONTRATTO")
-                        pdf_fattura = genera_pdf_tipo(c, "FATTURA")
-                        pdf_multe = genera_pdf_tipo(c, "MULTE")
-
-                        # Pulsanti Download
-                        col1.download_button("📜 Contratto", pdf_contratto, f"Contratto_{id_c}.pdf", key=f"c_{id_c}")
-                        col2.download_button("💰 Ricevuta", pdf_fattura, f"Ricevuta_{id_c}.pdf", key=f"r_{id_c}")
-                        col3.download_button("🚨 Multe", pdf_multe, f"Multe_{id_c}.pdf", key=f"m_{id_c}")
-
-                        # Tasto WhatsApp
-                        import urllib.parse
-                        msg = f"Ciao {c.get('nome')}, da Battaglia Rent! 🛵 Ti inviamo i documenti dello scooter {c.get('targa')}."
-                        msg_encoded = urllib.parse.quote(msg)
-                        num_tel = str(c.get('telefono', '')).replace(" ", "").replace("+", "")
-                        wa_url = f"https://wa.me/{num_tel}?text={msg_encoded}"
-                        col4.link_button("🟢 WhatsApp", wa_url)
-
-                        # Sezione Foto
-                        st.write("---")
-                        fa, fb = st.columns(2)
-                        if c.get("url_fronte"):
-                            fa.link_button("👁️ Vedi Fronte", c["url_fronte"])
-                        if c.get("url_retro"):
-                            fb.link_button("👁️ Vedi Retro", c["url_retro"])
-            else:
-                st.warning("Nessun contratto trovato.")
-        else:
-            st.info("Archivio vuoto.")
-
+                testo = f"{c.get('targa', '')} {c.get('cognome', '')}".lower()
+                if search_query in testo:
+                    with st.expander(f"📝 {c.get('targa')} - {c.get('cognome', '').upper()}"):
+                        col_a, col_b, col_c = st.columns(3)
+                        col_a.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"Cont_{c['id']}.pdf")
+                        col_b.download_button("💰 Ricevuta", genera_pdf_tipo(c, "FATTURA"), f"Ric_{c['id']}.pdf")
+                        col_c.download_button("🚨 Multe", genera_pdf_tipo(c, "MULTE"), f"Multe_{c['id']}.pdf")
     except Exception as e:
         st.error(f"Errore caricamento archivio: {e}")
