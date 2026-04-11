@@ -141,17 +141,20 @@ def genera_pdf_tipo(c, tipo):
 if "autenticato" not in st.session_state:
     st.session_state.autenticato = False
 
-if not st.session_state.autenticato:
-    st.title("🔐 Login Battaglia Rent")
-    pwd = st.text_input("Inserisci Password", type="password")
-    if st.button("Entra"):
-        if pwd == st.secrets["APP_PASSWORD"]:
+# --- LOGICA DI ACCESSO ---
+if not st.session_state.get("autenticato", False):
+    st.title("🔐 Accesso Master Rent")
+    password = st.text_input("Inserisci la password", type="password")
+    if st.button("Accedi"):
+        if password == "1234": # Sostituisci con la tua password
             st.session_state.autenticato = True
             st.rerun()
-        else: st.error("Password errata")
+        else:
+            st.error("Password errata")
 else:
-   else:
+    # --- SE AUTENTICATO, MOSTRA IL RESTO ---
     st.title("🛵 Nuovo Noleggio Scooter")
+    
     with st.form("nuovo_noleggio", clear_on_submit=True):
         col1, col2 = st.columns(2)
         nome = col1.text_input("Nome")
@@ -177,7 +180,7 @@ else:
         retro = f2.file_uploader("Retro Patente", type=["jpg", "png", "jpeg"])
 
         st.subheader("⚖️ Note Legali e Privacy")
-        st.info("Dichiaro di aver preso visione delle condizioni di noleggio e di assumermi ogni responsabilità...")
+        st.info("Dichiaro di aver preso visione delle condizioni di noleggio...")
         check_condizioni = st.checkbox("Accetto le Condizioni di Noleggio")
         check_privacy = st.checkbox("Accetto l'Informativa Privacy")
 
@@ -207,11 +210,12 @@ else:
                         "data_nascita": d_nas, "numero_patente": pat, "url_fronte": u_f, 
                         "url_retro": u_r, "codice_fiscale": cf, "indirizzo_cliente": ind, "nazionalita": naz
                     }
+                    
                     supabase.table("contratti").insert(dati).execute()
                     st.success(f"Contratto n° {n_f} salvato con successo!")
                     st.rerun()
                 except Exception as e:
-                    # Questo box rosso ci dirà finalmente il VERO errore di Supabase
+                    # QUESTO CI DIRÀ IL VERO ERRORE DI SUPABASE
                     st.error(f"⚠️ ERRORE DA SUPABASE: {str(e)}")
             else:
                 st.error("Compila i campi obbligatori (Nome, Cognome, Targa)")
