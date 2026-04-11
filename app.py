@@ -180,14 +180,14 @@ else:
         check_condizioni = st.checkbox("Accetto le Condizioni di Noleggio")
         check_privacy = st.checkbox("Accetto l'Informativa Privacy e conservazione foto documenti")
 
-        st.subheader("✍️ Firma")
+     st.subheader("✍️ Firma")
         canvas = st_canvas(stroke_width=3, stroke_color="#000", background_color="#eee", height=150, width=400, key="firma")
 
-       if st.form_submit_button("💾 SALVA E GENERA"):
+        if st.form_submit_button("💾 SALVA E GENERA"):
             if not check_condizioni or not check_privacy:
                 st.error("Devi accettare le condizioni e la privacy per procedere!")
             elif nome and cognome and targa:
-                try: # <--- AGGIUNGIAMO QUESTO
+                try:
                     firma_b64 = ""
                     if canvas.image_data is not None:
                         img = Image.fromarray(canvas.image_data.astype("uint8"))
@@ -207,15 +207,13 @@ else:
                         "url_retro": u_r, "codice_fiscale": cf, "indirizzo_cliente": ind, "nazionalita": naz
                     }
                     
-                    # Proviamo a eseguire l'inserimento
+                    # Inserimento dati
                     supabase.table("contratti").insert(dati).execute()
                     st.success(f"Contratto n° {n_f} salvato con successo!")
                     st.rerun()
-
                 except Exception as e:
-                    # QUESTO CI DIRÀ FINALMENTE COSA NON VA
-                    st.error(f"⚠️ ERRORE DETTAGLIATO DA SUPABASE: {str(e)}")
-                    # Se l'errore è una colonna mancante, lo vedrai scritto qui sopra!
+                    # Questo ci dirà il VERO errore (colonne mancanti o altro)
+                    st.error(f"⚠️ ERRORE DA SUPABASE: {str(e)}")
             else:
                 st.error("Compila i campi obbligatori (Nome, Cognome, Targa)")
  # --- ARCHIVIO ---
