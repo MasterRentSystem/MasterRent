@@ -6,7 +6,6 @@ from fpdf import FPDF
 import io
 import base64
 from datetime import datetime
-import urllib.parse
 
 # --- CONFIGURAZIONE DATI DITTA ---
 DITTA = "BATTAGLIA RENT"
@@ -49,7 +48,7 @@ def upload_foto(file, targa, prefix):
     except: return None
 
 # ------------------------------------------------
-# GENERAZIONE PDF (VERSIONE COMPATIBILE AL 100%)
+# GENERAZIONE PDF (FIXATO PER ERRORI ENCODE)
 # ------------------------------------------------
 def genera_pdf_tipo(c, tipo):
     pdf = FPDF()
@@ -120,18 +119,21 @@ def genera_pdf_tipo(c, tipo):
         pdf.cell(110, 10, safe_pdf_text(f"Noleggio Scooter {targa}"), 1)
         pdf.cell(40, 10, f"EUR {s(c.get('prezzo'))}", 1, 1, 'R')
 
-    # FIX: Restituiamo bytes puri usando un buffer
-    return bytes(pdf.output(dest='S').encode('latin-1'))
+    # FIX CRITICO: Controlliamo il tipo di output per evitare l'errore .encode()
+    pdf_out = pdf.output(dest='S')
+    if isinstance(pdf_out, str):
+        return pdf_out.encode('latin-1')
+    return bytes(pdf_out)
 
 # ------------------------------------------------
-# INTERFACCIA
+# INTERFACCIA APP
 # ------------------------------------------------
 if "auth" not in st.session_state: st.session_state.auth = False
 
 if not st.session_state.auth:
-    st.title("🛵 BATTAGLIA RENT Login")
+    st.title("🛵 BATTAGLIA RENT")
     if st.text_input("Password", type="password") == "1234":
-        if st.button("Entra"): 
+        if st.button("Accedi"):
             st.session_state.auth = True
             st.rerun()
 else:
@@ -145,17 +147,14 @@ else:
             cognome = col1.text_input("Cognome")
             tel = col1.text_input("WhatsApp")
             cf = col1.text_input("Codice Fiscale")
-            
             targa = col2.text_input("Targa").upper()
             pat = col2.text_input("N. Patente")
             l_n = col2.text_input("Luogo Nascita")
             d_n = col2.text_input("Data Nascita")
             prez = col2.number_input("Prezzo (€)", min_value=0.0)
-            
             ind = st.text_area("Indirizzo Completo")
             i_d, f_d = st.columns(2)
-            ini = i_d.date_input("Inizio")
-            fin = f_d.date_input("Fine")
+            ini, fin = i_d.date_input("Inizio"), f_d.date_input("Fine")
             
             st.subheader("📸 Foto Patente")
             f_col, r_col = st.columns(2)
@@ -186,50 +185,34 @@ else:
                             "data_nascita": d_n, "numero_patente": pat, "url_fronte": u_f,
                             "url_retro": u_r, "codice_fiscale": cf, "indirizzo_cliente": ind
                         }).execute()
-                        st.success("Salvato correttamente!")
+                        st.success("Salvato!")
                         st.rerun()
                     except Exception as e: st.error(f"Errore: {e}")
 
     else:
-        st.title("📂 Archivio e Documenti")
+        st.title("📂 Archivio")
         res = supabase.table("contratti").select("*").order("id", desc=True).execute()
         cerca = st.text_input("🔍 Cerca Targa o Cognome").lower()
         
         for r in res.data:
             if cerca in f"{r['targa']} {r['cognome']}".lower():
                 with st.expander(f"📄 {r['targa']} - {r['cognome'].upper()}"):
-                    
-                    # Sezione PDF
-                    st.write("### 📄 Scarica PDF")
                     c1, c2, c3 = st.columns(3)
-                    
                     try:
-                        # Generiamo i bytes PRIMA di passarli al pulsante
-                        pdf_contratto = genera_pdf_tipo(r, "CONTRATTO")
-                        c1.download_button("📜 Contratto", pdf_contratto, f"Cont_{r['targa']}.pdf", "application/pdf")
+                        # Generiamo i PDF gestendo i bytes correttamente
+                        pdf_c = genera_pdf_tipo(r, "CONTRATTO")
+                        c1.download_button("📜 Contratto", pdf_c, f"Cont_{r['targa']}.pdf", "application/pdf")
                         
-                        pdf_ricevuta = genera_pdf_tipo(r, "FATTURA")
-                        c2.download_button("💰 Ricevuta", pdf_ricevuta, f"Ric_{r['numero_fattura']}.pdf", "application/pdf")
+                        pdf_f = genera_pdf_tipo(r, "FATTURA")
+                        c2.download_button("💰 Ricevuta", pdf_f, f"Ric_{r['numero_fattura']}.pdf", "application/pdf")
                         
-                        pdf_multe = genera_pdf_tipo(r, "MULTE")
-                        c3.download_button("🚨 Modulo Vigili", pdf_multe, f"Multe_{r['targa']}.pdf", "application/pdf")
+                        pdf_m = genera_pdf_tipo(r, "MULTE")
+                        c3.download_button("🚨 Modulo Vigili", pdf_m, f"Multe_{r['targa']}.pdf", "application/pdf")
                     except Exception as e:
-                        st.error(f"Errore generazione PDF: {e}")
+                        st.error(f"Errore PDF: {e}")
 
                     st.write("---")
-                    
-                    # Sezione FOTO
-                    st.subheader("📸 Documenti Salvati")
+                    st.subheader("📸 Documenti")
                     f_col, r_col = st.columns(2)
-                    
-                    if r.get("url_fronte"):
-                        f_col.image(r["url_fronte"], caption="Fronte Patente")
-                        f_col.markdown(f"[🔗 Apri Foto Fronte]({r['url_fronte']})")
-                    else:
-                        f_col.warning("Nessuna foto fronte")
-                        
-                    if r.get("url_retro"):
-                        r_col.image(r["url_retro"], caption="Retro Patente")
-                        r_col.markdown(f"[🔗 Apri Foto Retro]({r['url_retro']})")
-                    else:
-                        r_col.warning("Nessuna foto retro")
+                    if r.get("url_fronte"): f_col.image(r["url_fronte"], caption="Fronte")
+                    if r.get("url_retro"): r_col.image(r["url_retro"], caption="Retro")
