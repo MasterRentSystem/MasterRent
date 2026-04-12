@@ -154,7 +154,7 @@ else:
 
     if menu == "Nuovo Noleggio":
         st.title("🛵 Nuovo Noleggio")
-        with st.form("form_noleggio", clear_on_submit=True):
+      with st.form("form_noleggio", clear_on_submit=True):
             c1, c2 = st.columns(2)
             nome, cognome = c1.text_input("Nome"), c1.text_input("Cognome")
             tel, cf = c1.text_input("Telefono (es. 39333...)"), c1.text_input("C.F. / ID")
@@ -179,7 +179,10 @@ else:
             st.subheader("✍️ Firma")
             canvas = st_canvas(stroke_width=3, stroke_color="#000", background_color="#eee", height=150, width=400, key="firma")
 
-          if st.form_submit_button("💾 SALVA E GENERA"):
+            # PULSANTE SALVA (Spostato correttamente a destra)
+            invio = st.form_submit_button("💾 SALVA E GENERA")
+            
+            if invio:
                 if check1 and check2 and check3 and nome and targa:
                     try:
                         firma_b64 = ""
@@ -210,7 +213,7 @@ else:
                 else:
                     st.warning("Compila i campi obbligatori e spunta tutte le caselle legali.")
 
-    # Questo 'else' deve essere allineato con 'if menu == "Nuovo Noleggio":'
+    # ARCHIVIO (Allineato correttamente fuori dal form)
     else:
         st.title("📂 Archivio Storico")
         try:
