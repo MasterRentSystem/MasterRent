@@ -7,16 +7,16 @@ import io
 import base64
 from datetime import datetime
 
-# --- 1. SOSTITUISCI DA QUI ---
+# --- CONFIGURAZIONE DATI DITTA ---
+DITTA = "BATTAGLIA RENT"
+INDIRIZZO_FISCALE = "Via Cognole n. 5, Forio (NA)"
+DATI_IVA = "P.IVA: 10252601215 | C.F.: BTTMNN87A53Z112S"
+
+# --- CONNESSIONE SUPABASE ---
 URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
-
 supabase: Client = create_client(URL, KEY)
-# --- A QUI ---
 
-# ------------------------------------------------
-# FUNZIONI UTILITY (il resto del codice continua qui...)
-# ------------------------------------------------
 # ------------------------------------------------
 # UTILITY
 # ------------------------------------------------
@@ -36,28 +36,27 @@ def prossimo_numero_fattura():
 def upload_to_supabase(file, targa, prefix):
     try:
         if file is None: return None
-        # Genera un nome unico per il file
         estensione = file.name.split('.')[-1]
-        nome_file = f"{prefix}{targa}{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.{estensione}"
+        # CORRETTO: rimosso il doppio riferimento a datetime
+        nome_file = f"{prefix}{targa}{datetime.now().strftime('%Y%m%d_%H%M%S')}.{estensione}"
         
-        # Carica il file su Supabase
         supabase.storage.from_("documenti").upload(nome_file, file.getvalue(), {"content-type": f"image/{estensione}"})
         
-        # Recupera l'URL pubblico
         url_pubblico = supabase.storage.from_("documenti").get_public_url(nome_file)
         return url_pubblico
     except Exception as e:
         st.error(f"Errore caricamento foto: {e}")
         return None
+
 # ------------------------------------------------
 # FUNZIONE PDF
 # ------------------------------------------------
 def genera_pdf_tipo(c, tipo):
     pdf = FPDF()
     pdf.add_page()
-    oggi = datetime.date.today().strftime("%d/%m/%Y")
+    # CORRETTO: cambiato datetime.date.today() in datetime.now().date()
+    oggi = datetime.now().date().strftime("%d/%m/%Y")
     
-    # Intestazione Ditta
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 6, safe_text(DITTA), ln=True)
     pdf.set_font("Arial", "", 9)
@@ -108,10 +107,10 @@ def genera_pdf_tipo(c, tipo):
     elif tipo == "MULTE":
         pdf.set_font("Arial", "B", 10)
         pdf.cell(0, 5, "Spett. le", ln=True, align="R")
-        pdf.cell(0, 5, "Polizia Locale di ____________________", ln=True, align="R")
+        pdf.cell(0, 5, "Polizia Locale di __________________", ln=True, align="R")
         pdf.ln(8)
         pdf.set_font("Arial", "B", 10)
-        pdf.multi_cell(0, 5, safe_text("OGGETTO:  RIFERIMENTO VS. ACCERTAMENTO VIOLAZIONE N. __________________ PROT. ________ - COMUNICAZIONE LOCAZIONE VEICOLO"))
+        pdf.multi_cell(0, 5, safe_text("OGGETTO:  RIFERIMENTO VS. ACCERTAMENTO VIOLAZIONE N. ________________ PROT. ______ - COMUNICAZIONE LOCAZIONE VEICOLO"))
         pdf.ln(6)
         pdf.set_font("Arial", "", 10)
         corpo = f"In riferimento al Verbale di accertamento di infrazione al Codice della strada di cui all'oggetto, con la presente, la sottoscritta BATTAGLIA MARIANNA nata a Berlino (Germania) il 13/01/1987 e residente in Forio alla Via Cognole n. 5 in qualita di titolare dell'omonima ditta individuale, C.F.: BTTMNN87A53Z112S e P. IVA: 10252601215\n\n" \
@@ -132,24 +131,23 @@ def genera_pdf_tipo(c, tipo):
 
     pdf_out = pdf.output(dest="S")
     return bytes(pdf_out) if not isinstance(pdf_out, str) else pdf_out.encode("latin-1")
+
 # ------------------------------------------------
 # LOGICA APP
 # ------------------------------------------------
 if "autenticato" not in st.session_state:
     st.session_state.autenticato = False
 
-# --- LOGICA DI ACCESSO ---
-if not st.session_state.get("autenticato", False):
+if not st.session_state.autenticato:
     st.title("🔐 Accesso Master Rent")
     password = st.text_input("Inserisci la password", type="password")
     if st.button("Accedi"):
-        if password == "1234": # Sostituisci con la tua password
+        if password == "1234":
             st.session_state.autenticato = True
             st.rerun()
         else:
             st.error("Password errata")
 else:
-    # --- SE AUTENTICATO, MOSTRA IL RESTO ---
     st.title("🛵 Nuovo Noleggio Scooter")
     
     with st.form("nuovo_noleggio", clear_on_submit=True):
@@ -177,7 +175,6 @@ else:
         retro = f2.file_uploader("Retro Patente", type=["jpg", "png", "jpeg"])
 
         st.subheader("⚖️ Note Legali e Privacy")
-        st.info("Dichiaro di aver preso visione delle condizioni di noleggio...")
         check_condizioni = st.checkbox("Accetto le Condizioni di Noleggio")
         check_privacy = st.checkbox("Accetto l'Informativa Privacy")
 
@@ -212,12 +209,10 @@ else:
                     st.success(f"Contratto n° {n_f} salvato con successo!")
                     st.rerun()
                 except Exception as e:
-                    # QUESTO CI DIRÀ IL VERO ERRORE DI SUPABASE
                     st.error(f"⚠️ ERRORE DA SUPABASE: {str(e)}")
             else:
                 st.error("Compila i campi obbligatori (Nome, Cognome, Targa)")
 
-    # --- ARCHIVIO ---
     st.divider()
     st.subheader("📂 Archivio Contratti")
     try:
