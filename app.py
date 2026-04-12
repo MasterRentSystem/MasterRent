@@ -1,4 +1,4 @@
-Import streamlit as st
+import streamlit as st
 from supabase import create_client, Client
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
