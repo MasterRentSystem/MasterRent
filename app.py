@@ -1,25 +1,22 @@
 import streamlit as st
-import datetime
-from fpdf import FPDF
-from supabase import create_client
+from supabase import create_client, Client
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
+from fpdf import FPDF
 import io
 import base64
+from datetime import datetime
+
+# --- 1. SOSTITUISCI DA QUI ---
+URL = st.secrets["SUPABASE_URL"]
+KEY = st.secrets["SUPABASE_KEY"]
+
+supabase: Client = create_client(URL, KEY)
+# --- A QUI ---
 
 # ------------------------------------------------
-# CONFIGURAZIONE
+# FUNZIONI UTILITY (il resto del codice continua qui...)
 # ------------------------------------------------
-st.set_page_config(layout="wide", page_title="Battaglia Rent Pro")
-
-DITTA = "BATTAGLIA MARIANNA"
-INDIRIZZO_FISCALE = "Via Cognole, 5 - 80075 Forio (NA)"
-DATI_IVA = "C.F. BTTMNN87A53Z112S - P. IVA 10252601215"
-
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
-supabase = create_client(url, key)
-
 # ------------------------------------------------
 # UTILITY
 # ------------------------------------------------
