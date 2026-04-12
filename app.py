@@ -208,18 +208,23 @@ else:
                     except Exception as e: st.error(f"Errore: {e}")
                 else: st.warning("Compila i campi obbligatori e spunta tutte le caselle legali.")
 
-    else:
+else:
         st.title("📂 Archivio Storico")
         res = supabase.table("contratti").select("*").order("id", desc=True).execute()
         if res.data:
             cerca = st.text_input("🔍 Cerca per Targa o Cognome").lower()
             for c in res.data:
-                if cerca in f"{c['targa']} {c['cognome']}".lower():
-                    with st.expander(f"📝 {c['targa']} - {c['cognome'].upper()} (Fattura {c['numero_fattura']})"):
+                # Usiamo str() su tutto per evitare l'errore di concatenazione
+                targa_label = str(c.get('targa', ''))
+                cognome_label = str(c.get('cognome', '')).upper()
+                num_fatt = str(c.get('numero_fattura', ''))
+                
+                if cerca in f"{targa_label} {cognome_label}".lower():
+                    with st.expander(f"📝 {targa_label} - {cognome_label} (Fattura {num_fatt})"):
                         p_col1, p_col2, p_col3 = st.columns(3)
-                        p_col1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"Cont_{c['id']}.pdf")
-                        p_col2.download_button("💰 Fattura", genera_pdf_tipo(c, "FATTURA"), f"Fatt_{c['id']}.pdf")
-                        p_col3.download_button("🚨 Multe", genera_pdf_tipo(c, "MULTE"), f"Multe_{c['id']}.pdf")
+                        p_col1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"Cont_{str(c['id'])}.pdf")
+                        p_col2.download_button("💰 Fattura", genera_pdf_tipo(c, "FATTURA"), f"Fatt_{str(c['id'])}.pdf")
+                        p_col3.download_button("🚨 Multe", genera_pdf_tipo(c, "MULTE"), f"Multe_{str(c['id'])}.pdf")
                         
                         st.write("---")
                         img_col1, img_col2 = st.columns(2)
@@ -228,5 +233,5 @@ else:
                         
                         t_tel = c.get('telefono')
                         if t_tel:
-                            msg = urllib.parse.quote(f"Buongiorno {c['nome']}, ecco i documenti Battaglia Rent per lo scooter {c['targa']}.")
+                            msg = urllib.parse.quote(f"Buongiorno {c.get('nome', '')}, ecco i documenti Battaglia Rent.")
                             st.markdown(f"[💬 Invia su WhatsApp](https://wa.me/{t_tel}?text={msg})")
