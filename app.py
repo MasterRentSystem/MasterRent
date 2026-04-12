@@ -49,7 +49,7 @@ def upload_foto(file, targa, prefix):
     except: return None
 
 # ------------------------------------------------
-# GENERAZIONE PDF
+# GENERAZIONE PDF (VERSIONE COMPATIBILE AL 100%)
 # ------------------------------------------------
 def genera_pdf_tipo(c, tipo):
     pdf = FPDF()
@@ -79,7 +79,7 @@ def genera_pdf_tipo(c, tipo):
                 f"1. Il conducente dichiara di essere in possesso di regolare patente.\n" \
                 f"2. Il locatario e responsabile di ogni danno causato al veicolo o a terzi.\n" \
                 f"3. In caso di furto, il locatario risponde per l'intero valore del veicolo.\n" \
-                f"4. Le multe prese durante il periodo sono a carico del locatario.\n" \
+                f"4. Le contravvenzioni (multe) prese durante il periodo sono a carico del locatario.\n" \
                 f"5. Il veicolo va riconsegnato con lo stesso livello di carburante.\n\n" \
                 f"Ai sensi artt. 1341-1342 c.c. si approvano i punti 2, 3 e 4."
         pdf.multi_cell(0, 5, safe_pdf_text(testo))
@@ -120,11 +120,11 @@ def genera_pdf_tipo(c, tipo):
         pdf.cell(110, 10, safe_pdf_text(f"Noleggio Scooter {targa}"), 1)
         pdf.cell(40, 10, f"EUR {s(c.get('prezzo'))}", 1, 1, 'R')
 
-    out = pdf.output(dest='S')
-    return out.encode('latin-1') if isinstance(out, str) else out
+    # FIX: Restituiamo bytes puri usando un buffer
+    return bytes(pdf.output(dest='S').encode('latin-1'))
 
 # ------------------------------------------------
-# APP
+# INTERFACCIA
 # ------------------------------------------------
 if "auth" not in st.session_state: st.session_state.auth = False
 
@@ -186,29 +186,39 @@ else:
                             "data_nascita": d_n, "numero_patente": pat, "url_fronte": u_f,
                             "url_retro": u_r, "codice_fiscale": cf, "indirizzo_cliente": ind
                         }).execute()
-                        st.success("Salvato!")
+                        st.success("Salvato correttamente!")
                         st.rerun()
                     except Exception as e: st.error(f"Errore: {e}")
 
     else:
-        st.title("📂 Archivio Contratti e Foto")
+        st.title("📂 Archivio e Documenti")
         res = supabase.table("contratti").select("*").order("id", desc=True).execute()
-        cerca = st.text_input("🔍 Cerca (Targa o Cognome)").lower()
+        cerca = st.text_input("🔍 Cerca Targa o Cognome").lower()
         
         for r in res.data:
             if cerca in f"{r['targa']} {r['cognome']}".lower():
                 with st.expander(f"📄 {r['targa']} - {r['cognome'].upper()}"):
-                    # PDF
+                    
+                    # Sezione PDF
+                    st.write("### 📄 Scarica PDF")
                     c1, c2, c3 = st.columns(3)
-                    pdf_c = genera_pdf_tipo(r, "CONTRATTO")
-                    c1.download_button("📜 Contratto", pdf_c, f"Cont_{r['targa']}.pdf", "application/pdf")
-                    pdf_f = genera_pdf_tipo(r, "FATTURA")
-                    c2.download_button("💰 Ricevuta", pdf_f, f"Ric_{r['numero_fattura']}.pdf", "application/pdf")
-                    pdf_m = genera_pdf_tipo(r, "MULTE")
-                    c3.download_button("🚨 Modulo Vigili", pdf_m, f"Multe_{r['targa']}.pdf", "application/pdf")
+                    
+                    try:
+                        # Generiamo i bytes PRIMA di passarli al pulsante
+                        pdf_contratto = genera_pdf_tipo(r, "CONTRATTO")
+                        c1.download_button("📜 Contratto", pdf_contratto, f"Cont_{r['targa']}.pdf", "application/pdf")
+                        
+                        pdf_ricevuta = genera_pdf_tipo(r, "FATTURA")
+                        c2.download_button("💰 Ricevuta", pdf_ricevuta, f"Ric_{r['numero_fattura']}.pdf", "application/pdf")
+                        
+                        pdf_multe = genera_pdf_tipo(r, "MULTE")
+                        c3.download_button("🚨 Modulo Vigili", pdf_multe, f"Multe_{r['targa']}.pdf", "application/pdf")
+                    except Exception as e:
+                        st.error(f"Errore generazione PDF: {e}")
 
                     st.write("---")
-                    # SEZIONE FOTO SALVATE
+                    
+                    # Sezione FOTO
                     st.subheader("📸 Documenti Salvati")
                     f_col, r_col = st.columns(2)
                     
