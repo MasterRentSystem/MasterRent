@@ -179,7 +179,7 @@ else:
             st.subheader("✍️ Firma")
             canvas = st_canvas(stroke_width=3, stroke_color="#000", background_color="#eee", height=150, width=400, key="firma")
 
-            if st.form_submit_button("💾 SALVA E GENERA"):
+          if st.form_submit_button("💾 SALVA E GENERA"):
                 if check1 and check2 and check3 and nome and targa:
                     try:
                         firma_b64 = ""
@@ -205,33 +205,36 @@ else:
                         supabase.table("contratti").insert(dati).execute()
                         st.success("Contratto Salvato!")
                         st.rerun()
-                    except Exception as e: st.error(f"Errore: {e}")
-                else: st.warning("Compila i campi obbligatori e spunta tutte le caselle legali.")
+                    except Exception as e:
+                        st.error(f"Errore: {e}")
+                else:
+                    st.warning("Compila i campi obbligatori e spunta tutte le caselle legali.")
 
-else:
+    # Questo 'else' deve essere allineato con 'if menu == "Nuovo Noleggio":'
+    else:
         st.title("📂 Archivio Storico")
-        res = supabase.table("contratti").select("*").order("id", desc=True).execute()
-        if res.data:
-            cerca = st.text_input("🔍 Cerca per Targa o Cognome").lower()
-            for c in res.data:
-                # Usiamo str() su tutto per evitare l'errore di concatenazione
-                targa_label = str(c.get('targa', ''))
-                cognome_label = str(c.get('cognome', '')).upper()
-                num_fatt = str(c.get('numero_fattura', ''))
-                
-                if cerca in f"{targa_label} {cognome_label}".lower():
-                    with st.expander(f"📝 {targa_label} - {cognome_label} (Fattura {num_fatt})"):
-                        p_col1, p_col2, p_col3 = st.columns(3)
-                        p_col1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"Cont_{str(c['id'])}.pdf")
-                        p_col2.download_button("💰 Fattura", genera_pdf_tipo(c, "FATTURA"), f"Fatt_{str(c['id'])}.pdf")
-                        p_col3.download_button("🚨 Multe", genera_pdf_tipo(c, "MULTE"), f"Multe_{str(c['id'])}.pdf")
-                        
-                        st.write("---")
-                        img_col1, img_col2 = st.columns(2)
-                        if c.get("url_fronte"): img_col1.image(c["url_fronte"], caption="Fronte Patente")
-                        if c.get("url_retro"): img_col2.image(c["url_retro"], caption="Retro Patente")
-                        
-                        t_tel = c.get('telefono')
-                        if t_tel:
-                            msg = urllib.parse.quote(f"Buongiorno {c.get('nome', '')}, ecco i documenti Battaglia Rent.")
-                            st.markdown(f"[💬 Invia su WhatsApp](https://wa.me/{t_tel}?text={msg})")
+        try:
+            res = supabase.table("contratti").select("*").order("id", desc=True).execute()
+            if res.data:
+                cerca = st.text_input("🔍 Cerca per Targa o Cognome").lower()
+                for c in res.data:
+                    t_label = str(c.get('targa', ''))
+                    c_label = str(c.get('cognome', '')).upper()
+                    if cerca in f"{t_label} {c_label}".lower():
+                        with st.expander(f"📝 {t_label} - {c_label} (Fattura {str(c.get('numero_fattura', ''))})"):
+                            p1, p2, p3 = st.columns(3)
+                            p1.download_button("📜 Contratto", genera_pdf_tipo(c, "CONTRATTO"), f"Cont_{c['id']}.pdf")
+                            p2.download_button("💰 Fattura", genera_pdf_tipo(c, "FATTURA"), f"Fatt_{c['id']}.pdf")
+                            p3.download_button("🚨 Multe", genera_pdf_tipo(c, "MULTE"), f"Multe_{c['id']}.pdf")
+                            
+                            st.write("---")
+                            i1, i2 = st.columns(2)
+                            if c.get("url_fronte"): i1.image(c["url_fronte"], caption="Fronte Patente")
+                            if c.get("url_retro"): i2.image(c["url_retro"], caption="Retro Patente")
+                            
+                            t_tel = c.get('telefono')
+                            if t_tel:
+                                msg = urllib.parse.quote(f"Buongiorno {c.get('nome', '')}, ecco i documenti Battaglia Rent.")
+                                st.markdown(f"[💬 Invia su WhatsApp](https://wa.me/{t_tel}?text={msg})")
+        except Exception as e:
+            st.error(f"Errore caricamento archivio: {e}")
