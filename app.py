@@ -87,7 +87,7 @@ def genera_contratto(c):
             pdf.image(io.BytesIO(base64.b64decode(firma_data)), x=140, y=pdf.get_y()+5, w=45)
         except: pass
     
-    return pdf.output(dest="S")
+    return bytes(pdf.output(dest="S"))
 
 def genera_fattura_aruba(c):
     pdf = BRPDF()
@@ -96,7 +96,6 @@ def genera_fattura_aruba(c):
     pdf.cell(0, 10, safe(f"FATTURA / INVOICE N. {c['numero_fattura']}"), ln=True, align="C", border="B")
     pdf.ln(5)
     
-    # Layout Cedente/Cessionario
     pdf.set_font("Arial", "B", 10)
     pdf.cell(95, 7, "FORNITORE / SUPPLIER", border=1)
     pdf.cell(95, 7, "CLIENTE / CUSTOMER", border=1, ln=True)
@@ -104,13 +103,12 @@ def genera_fattura_aruba(c):
     pdf.cell(95, 5, safe(DITTA), border="LR")
     pdf.cell(95, 5, safe(f"{c['nome']} {c['cognome']}"), border="LR", ln=True)
     pdf.cell(95, 5, safe(DATI_IVA), border="LR")
-    # Se straniero, gestiamo CF vuoto o identificativo estero
+    
     id_cliente = c['codice_fiscale'] if c['codice_fiscale'] else "ID ESTERO / FOREIGN ID"
     pdf.cell(95, 5, safe(f"C.F./Tax ID: {id_cliente}"), border="LR", ln=True)
     pdf.cell(95, 5, safe(INDIRIZZO), border="LR")
     pdf.cell(95, 5, safe(f"PEC/Email: {c.get('pec', 'N/A')}"), border="LR", ln=True)
     pdf.cell(95, 5, "", border="LRB")
-    # Per stranieri Codice Univoco e sempre 0000000
     pdf.cell(95, 5, safe(f"SDI: {c.get('codice_univoco', '0000000')}"), border="LRB", ln=True)
     
     pdf.ln(10)
@@ -119,7 +117,7 @@ def genera_fattura_aruba(c):
     pdf.cell(140, 10, safe(f"Rental Services - Scooter {c['modello']} ({c['targa']})"), border=1)
     pdf.cell(50, 10, f"{c['prezzo']} EUR", border=1, ln=True)
     
-    return pdf.output(dest="S")
+    return bytes(pdf.output(dest="S"))
 
 # --- APP STREAMLIT ---
 st.set_page_config(page_title="Battaglia Rent Pro", layout="wide")
@@ -134,21 +132,17 @@ if not st.session_state.auth:
 t1, t2 = st.tabs(["📝 Nuovo Noleggio", "📂 Archivio"])
 
 with t1:
-    with st.form("form_v14"):
+    with st.form("form_v15"):
         st.subheader("👤 Dati Cliente (Italiano o Straniero)")
         c1, c2, c3 = st.columns(3)
-        nome = c1.text_input("Nome")
-        cognome = c2.text_input("Cognome")
+        nome, cognome = c1.text_input("Nome"), c2.text_input("Cognome")
         cf = c3.text_input("Codice Fiscale / ID Estero")
-        
-        c4, c5 = st.columns(2)
-        pec = c4.text_input("PEC o Email")
-        sdi = c5.text_input("Codice SDI (Stranieri: 0000000)", value="0000000")
+        pec = st.text_input("PEC o Email")
+        sdi = st.text_input("Codice SDI (Stranieri: 0000000)", value="0000000")
         
         st.subheader("🛵 Dati Noleggio")
         c6, c7, c8 = st.columns(3)
-        mod = c6.text_input("Modello Scooter")
-        tar = c7.text_input("Targa").upper()
+        mod, tar = c6.text_input("Modello Scooter"), c7.text_input("Targa").upper()
         pat = c8.text_input("N. Patente")
         
         c9, c10, c11 = st.columns(3)
@@ -157,57 +151,50 @@ with t1:
         ben = c11.selectbox("Livello Benzina", ["1/8", "1/4", "1/2", "3/4", "Pieno"])
         
         c12, c13 = st.columns(2)
-        ini = c12.date_input("Data Inizio")
-        fin = c13.date_input("Data Fine")
-        
-        dat_n = st.text_input("Data di Nascita")
-        luo_n = st.text_input("Luogo di Nascita")
-        ind = st.text_input("Indirizzo Residenza Completo")
+        ini, fin = c12.date_input("Inizio"), c13.date_input("Fine")
+        dat_n, luo_n = st.text_input("Data di Nascita"), st.text_input("Luogo di Nascita")
+        ind = st.text_input("Indirizzo Residenza")
 
         st.subheader("📸 Documenti")
         f_front = st.file_uploader("Fronte Patente", type=['jpg','png','jpeg'])
         f_back = st.file_uploader("Retro Patente", type=['jpg','png','jpeg'])
         
         st.write("Firma Cliente")
-        canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_v14")
+        canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_v15")
 
         if st.form_submit_button("REGISTRA NOLEGGIO"):
-            # Salvataggio Firma
             img = Image.fromarray(canvas.image_data.astype("uint8"))
             buf = io.BytesIO(); img.save(buf, format="PNG")
             firma = base64.b64encode(buf.getvalue()).decode()
-            
-            # Caricamento Cloud
-            u_f = upload_foto(f_front, tar, "F")
-            u_r = upload_foto(f_back, tar, "R")
-            
-            # NUMERAZIONE SEQUENZIALE
-            num_sequenziale = get_prossimo_numero()
+            u_f, u_r = upload_foto(f_front, tar, "F"), upload_foto(f_back, tar, "R")
+            num_seq = get_prossimo_numero()
             
             dati = {
                 "nome": nome, "cognome": cognome, "codice_fiscale": cf, "modello": mod, "targa": tar,
-                "prezzo": prz, "inizio": str(ini), "fine": str(fin), "numero_fattura": num_sequenziale,
+                "prezzo": prz, "inizio": str(ini), "fine": str(fin), "numero_fattura": num_seq,
                 "firma": firma, "url_fronte": u_f, "url_retro": u_r, "benzina": ben,
                 "deposito": dep, "numero_patente": pat, "pec": pec, "codice_univoco": sdi,
                 "data_nascita": dat_n, "luogo_nascita": luo_n, "indirizzo_cliente": ind,
                 "data_creazione": datetime.now().isoformat()
             }
             supabase.table("contratti").insert(dati).execute()
-            st.success(f"Contratto e Fattura N. {num_sequenziale} generati con successo!")
+            st.success(f"Registrato! Numero: {num_seq}")
 
 with t2:
-    st.subheader("📂 Registro Storico")
-    search = st.text_input("🔍 Cerca per Cognome o Targa")
+    search = st.text_input("🔍 Cerca")
     res = supabase.table("contratti").select("*").order("numero_fattura", desc=True).execute()
-    
     for r in res.data:
         if search.lower() in f"{r['cognome']} {r['targa']}".lower():
             with st.expander(f"Doc N. {r['numero_fattura']} - {r['cognome']} ({r['targa']})"):
-                col1, col2, col3 = st.columns(3)
-                col1.download_button("📜 Contratto", genera_contratto(r), f"Contratto_{r['id']}.pdf", key=f"c_{r['id']}")
-                col2.download_button("🧾 Fattura Aruba", genera_fattura_aruba(r), f"Fattura_{r['id']}.pdf", key=f"f_{r['id']}")
+                col1, col2 = st.columns(2)
+                # Forza il passaggio in byte per evitare StreamlitAPIException
+                pdf_contratto = genera_contratto(r)
+                pdf_fattura = genera_fattura_aruba(r)
+                
+                col1.download_button("📜 Contratto", data=pdf_contratto, file_name=f"Contratto_{r['numero_fattura']}.pdf", mime="application/pdf")
+                col2.download_button("🧾 Fattura Aruba", data=pdf_fattura, file_name=f"Fattura_{r['numero_fattura']}.pdf", mime="application/pdf")
                 
                 st.write("---")
                 f1, f2 = st.columns(2)
-                if r.get("url_fronte"): f1.image(r["url_fronte"], caption="Fronte Patente", width=300)
-                if r.get("url_retro"): f2.image(r["url_retro"], caption="Retro Patente", width=300)
+                if r.get("url_fronte"): f1.image(r["url_fronte"], caption="Fronte Patente")
+                if r.get("url_retro"): f2.image(r["url_retro"], caption="Retro Patente")
