@@ -44,7 +44,7 @@ def upload_foto(file, targa, tipo):
         return supabase.storage.from_("documenti").get_public_url(nome)
     except: return None
 
-# --- GENERAZIONE PDF ---
+# --- GENERAZIONE PDF (FIX ATTRIBUTEERROR) ---
 def genera_pdf(c, tipo="CONTRATTO"):
     pdf = FPDF()
     pdf.add_page()
@@ -67,8 +67,7 @@ C.F.: {s(c.get('codice_fiscale'))} | NAZIONALITA: {s(c.get('nazionalita'))}
 RESIDENZA: {s(c.get('indirizzo_cliente'))}
 
 VEICOLO: {s(c.get('modello'))} | TARGA: {s(c.get('targa'))}
-PATENTE: {s(c.get('numero_patente'))}
-LIVELLO BENZINA: {s(c.get('benzina'))}
+PATENTE: {s(c.get('numero_patente'))} | BENZINA: {s(c.get('benzina'))}
 NOTE DANNI: {s(c.get('note_danni'))}
 
 PERIODO: Dal {s(c.get('inizio'))} Al {s(c.get('fine'))}
@@ -79,13 +78,17 @@ PREZZO: EUR {s(c.get('prezzo'))} | DEPOSITO: EUR {s(c.get('deposito'))}
     if tipo == "CONTRATTO":
         pdf.ln(5)
         pdf.set_font("Arial", "B", 9)
-        pdf.cell(0, 5, "Firma del cliente per accettazione clausole e sanzioni amministrative:", ln=True)
+        pdf.cell(0, 5, "Firma del cliente (per accettazione clausole e sanzioni):", ln=True)
         if c.get("firma") and len(str(c["firma"])) > 50:
             try:
                 pdf.image(io.BytesIO(base64.b64decode(c["firma"])), x=130, y=pdf.get_y()+2, w=40)
             except: pass
             
-    return pdf.output(dest="S").encode("latin-1", "replace")
+    # FIX: Gestione corretta dell'output in byte
+    output = pdf.output(dest="S")
+    if isinstance(output, str):
+        return output.encode("latin-1", "replace")
+    return bytes(output)
 
 # --- LOGIN ---
 if "auth" not in st.session_state: st.session_state.auth = False
@@ -119,7 +122,7 @@ with t1:
         targa = c6.text_input("Targa").upper()
         benzina = c7.selectbox("Livello Benzina", ["1/8", "2/8", "3/8", "4/8", "5/8", "6/8", "7/8", "8/8 (Pieno)"])
         
-        note_danni = st.text_area("Note Danni (Graffi, ammaccature, ecc.)")
+        note_danni = st.text_area("Note Danni")
         
         c8, c9, c10 = st.columns(3)
         prezzo = c8.number_input("Prezzo (€)", min_value=0.0)
@@ -133,7 +136,7 @@ with t1:
         
         st.write("Firma Cliente:")
         canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig")
-        accetto = st.checkbox("Accetto i termini contrattuali e la responsabilità per multe/danni")
+        accetto = st.checkbox("Accetto i termini e la responsabilità per multe/danni")
 
         if st.form_submit_button("💾 SALVA CONTRATTO"):
             if not nome or not targa or not accetto:
@@ -149,40 +152,26 @@ with t1:
                     ur = upload_foto(r_p, targa, "R")
                     num_f = get_prossimo_numero()
 
-                    # Mapping esatto con le tue colonne Supabase
                     nuovo_contratto = {
-                        "nome": nome,
-                        "cognome": cognome,
-                        "telefono": telefono,
-                        "nazionalita": nazionalita,
-                        "codice_fiscale": cf,
-                        "luogo_nascita": luogo_n,
-                        "data_nascita": data_n,
-                        "indirizzo_cliente": indirizzo,
-                        "modello": modello,
-                        "targa": targa,
-                        "numero_patente": patente,
-                        "benzina": benzina,
-                        "note_danni": note_danni,
-                        "prezzo": prezzo,
-                        "deposito": deposito,
-                        "inizio": str(ini),
-                        "fine": str(fin),
-                        "firma": firma_b64,
-                        "url_fronte": uf,
-                        "url_retro": ur,
-                        "numero_fattura": num_f,
-                        "data_creazione": datetime.now().isoformat() # Usiamo il tuo nome colonna
+                        "nome": nome, "cognome": cognome, "telefono": telefono,
+                        "nazionalita": nazionalita, "codice_fiscale": cf,
+                        "luogo_nascita": luogo_n, "data_nascita": data_n,
+                        "indirizzo_cliente": indirizzo, "modello": modello,
+                        "targa": targa, "numero_patente": patente, "benzina": benzina,
+                        "note_danni": note_danni, "prezzo": prezzo, "deposito": deposito,
+                        "inizio": str(ini), "fine": str(fin), "firma": firma_b64,
+                        "url_fronte": uf, "url_retro": ur, "numero_fattura": num_f,
+                        "data_creazione": datetime.now().isoformat()
                     }
                     
                     try:
                         supabase.table("contratti").insert(nuovo_contratto).execute()
-                        st.success(f"Contratto N. {num_f} salvato correttamente!")
+                        st.success(f"Contratto N. {num_f} salvato!")
                     except Exception as e:
                         st.error(f"Errore tecnico DB: {e}")
 
 with t2:
-    search = st.text_input("🔍 Cerca per Cognome o Targa").lower()
+    search = st.text_input("🔍 Cerca...").lower()
     res = supabase.table("contratti").select("*").order("numero_fattura", desc=True).execute()
     for r in res.data:
         if search in f"{r['cognome']} {r['targa']}".lower():
