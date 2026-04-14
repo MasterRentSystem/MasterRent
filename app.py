@@ -7,14 +7,14 @@ import io
 import base64
 from datetime import datetime
 
-# --- DATI FISSI AZIENDALE ---
+# --- CONFIGURAZIONE AZIENDALE ---
 DITTA = "BATTAGLIA RENT"
 TITOLARE = "BATTAGLIA MARIANNA"
 INDIRIZZO = "Via Cognole n. 5, Forio (NA)"
 DATI_IVA = "P.IVA: 10252601215 | C.F.: BTTMNN87A53Z112S"
 NATO_A = "Berlino (Germania) il 13/01/1987"
 
-# Connessione Supabase
+# Connessione Database
 URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
@@ -24,6 +24,7 @@ def s(v): return "" if v is None else str(v)
 def safe(t): return s(t).encode("latin-1", "replace").decode("latin-1")
 
 def get_prossimo_numero():
+    """Garantisce la numerazione sequenziale corretta"""
     try:
         res = supabase.table("contratti").select("numero_fattura").execute()
         nums = [int(r['numero_fattura']) for r in res.data if str(r['numero_fattura']).isdigit()]
@@ -43,7 +44,7 @@ def upload_foto(file, targa, tipo):
         return supabase.storage.from_("documenti").get_public_url(nome)
     except: return None
 
-# --- PDF GENERATOR ---
+# --- GENERATORE PDF PROFESSIONALE ---
 class BRPDF(FPDF):
     def header(self):
         self.set_font("Arial", "B", 12)
@@ -59,131 +60,154 @@ def genera_contratto(c):
     pdf.add_page()
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 10, safe(f"CONTRATTO DI NOLEGGIO N. {c['numero_fattura']}"), ln=True, align="C")
+    pdf.ln(5)
     
-    # Testo Bilingue dalle tue foto
-    pdf.set_font("Arial", "I", 8)
-    pdf.multi_cell(0, 4, safe("Il presente contratto disciplina il noleggio dello scooter tra la societa e il cliente.\nThis agreement governs the rental of the scooter between the company and the customer."))
+    # Dati Conduttore
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(0, 7, " DATI DEL CONDUTTORE / CUSTOMER DETAILS", ln=True, fill=True, border=1)
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(0, 7, safe(f"Nome/Name: {c['nome']} {c['cognome']}"), border="LR", ln=True)
+    pdf.cell(0, 7, safe(f"Nato a/Born in: {c['luogo_nascita']} il {c['data_nascita']}"), border="LR", ln=True)
+    pdf.cell(0, 7, safe(f"Residenza/Address: {c['indirizzo_cliente']}"), border="LR", ln=True)
+    pdf.cell(0, 7, safe(f"Patente/Driver License: {c['numero_patente']} | C.F.: {c['codice_fiscale']}"), border="LRB", ln=True)
     
     pdf.ln(5)
     pdf.set_font("Arial", "B", 10)
-    pdf.cell(0, 7, " DATI RIEPILOGATIVI", ln=True, fill=True, border=1)
+    pdf.cell(0, 7, " DATI NOLEGGIO / RENTAL DETAILS", ln=True, fill=True, border=1)
     pdf.set_font("Arial", "", 10)
-    pdf.cell(0, 7, safe(f"Conduttore: {c['nome']} {c['cognome']} | Patente: {c['numero_patente']}"), border=1, ln=True)
-    pdf.cell(0, 7, safe(f"Veicolo: {c['modello']} | Targa: {c['targa']} | Benzina: {c['benzina']}"), border=1, ln=True)
-    pdf.cell(0, 7, safe(f"Periodo: dal {c['inizio']} al {c['fine']}"), border=1, ln=True)
-    
-    # Clausole Legali Obbligatorie
-    pdf.ln(5)
-    pdf.set_font("Arial", "B", 8)
-    pdf.cell(0, 5, "CONDIZIONI E PRIVACY:", ln=True)
-    pdf.set_font("Arial", "", 7)
-    pdf.multi_cell(0, 4, safe("Il cliente e responsabile per sanzioni (Art. 126 bis CdS). Danni a carico del conduttore. Il veicolo deve tornare con stessa benzina. Autorizzazione al trattamento dati GDPR."), border=1)
+    pdf.cell(0, 7, safe(f"Veicolo/Vehicle: {c['modello']} | Targa/Plate: {c['targa']}"), border="LR", ln=True)
+    pdf.cell(0, 7, safe(f"Inizio/Start: {c['inizio']} | Fine/End: {c['fine']}"), border="LR", ln=True)
+    pdf.cell(0, 7, safe(f"Prezzo/Price: {c['prezzo']} EUR | Deposito/Deposit: {c['deposito']} EUR"), border="LRB", ln=True)
 
-    # GESTIONE SICURA FIRMA (Per evitare l'errore Binascii)
+    # Firma
     firma_data = c.get("firma")
     if firma_data and len(str(firma_data)) > 100:
         try:
-            # Pulizia della stringa base64 se necessario
             if "," in str(firma_data): firma_data = str(firma_data).split(",")[1]
             pdf.image(io.BytesIO(base64.b64decode(firma_data)), x=140, y=pdf.get_y()+5, w=45)
-        except Exception:
-            pdf.set_font("Arial", "I", 8)
-            pdf.cell(0, 10, "(Firma acquisita digitalmente)", ln=True, align="R")
+        except: pass
+    
+    return pdf.output(dest="S")
 
-    res = pdf.output(dest="S")
-    return bytes(res) if isinstance(res, (bytes, bytearray)) else res.encode("latin-1")
-
-def genera_vigili(c):
+def genera_fattura_aruba(c):
     pdf = BRPDF()
     pdf.add_page()
-    pdf.set_font("Arial", "B", 11)
-    pdf.cell(0, 10, safe("DICHIARAZIONE PER LE AUTORITA (RINOTIFICA)"), ln=True, align="C")
-    pdf.set_font("Arial", "", 11)
-    testo = (f"La sottoscritta {TITOLARE}, nata a {NATO_A}, titolare della ditta {DITTA}, "
-             f"dichiara che il veicolo {c['modello']} targa {c['targa']} in data {c['inizio']} "
-             f"era in locazione al sig. {c['nome']} {c['cognome']}, nato il {c['data_nascita']} a {c['luogo_nascita']}. "
-             f"Residente in {c['indirizzo_cliente']}. Patente n. {c['numero_patente']}. In fede.")
-    pdf.multi_cell(0, 7, safe(testo))
-    res = pdf.output(dest="S")
-    return bytes(res) if isinstance(res, (bytes, bytearray)) else res.encode("latin-1")
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, safe(f"FATTURA / INVOICE N. {c['numero_fattura']}"), ln=True, align="C", border="B")
+    pdf.ln(5)
+    
+    # Layout Cedente/Cessionario
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(95, 7, "FORNITORE / SUPPLIER", border=1)
+    pdf.cell(95, 7, "CLIENTE / CUSTOMER", border=1, ln=True)
+    pdf.set_font("Arial", "", 9)
+    pdf.cell(95, 5, safe(DITTA), border="LR")
+    pdf.cell(95, 5, safe(f"{c['nome']} {c['cognome']}"), border="LR", ln=True)
+    pdf.cell(95, 5, safe(DATI_IVA), border="LR")
+    # Se straniero, gestiamo CF vuoto o identificativo estero
+    id_cliente = c['codice_fiscale'] if c['codice_fiscale'] else "ID ESTERO / FOREIGN ID"
+    pdf.cell(95, 5, safe(f"C.F./Tax ID: {id_cliente}"), border="LR", ln=True)
+    pdf.cell(95, 5, safe(INDIRIZZO), border="LR")
+    pdf.cell(95, 5, safe(f"PEC/Email: {c.get('pec', 'N/A')}"), border="LR", ln=True)
+    pdf.cell(95, 5, "", border="LRB")
+    # Per stranieri Codice Univoco e sempre 0000000
+    pdf.cell(95, 5, safe(f"SDI: {c.get('codice_univoco', '0000000')}"), border="LRB", ln=True)
+    
+    pdf.ln(10)
+    pdf.cell(140, 8, "DESCRIZIONE / DESCRIPTION", border=1, fill=True)
+    pdf.cell(50, 8, "TOTALE / TOTAL", border=1, fill=True, ln=True)
+    pdf.cell(140, 10, safe(f"Rental Services - Scooter {c['modello']} ({c['targa']})"), border=1)
+    pdf.cell(50, 10, f"{c['prezzo']} EUR", border=1, ln=True)
+    
+    return pdf.output(dest="S")
 
 # --- APP STREAMLIT ---
 st.set_page_config(page_title="Battaglia Rent Pro", layout="wide")
 
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
-    if st.text_input("Password", type="password") == "1234":
-        if st.button("Accedi"): st.session_state.auth = True; st.rerun()
+    pwd = st.text_input("Accesso Gestionale", type="password")
+    if st.button("Entra"):
+        if pwd == "1234": st.session_state.auth = True; st.rerun()
     st.stop()
 
-tab1, tab2 = st.tabs(["📝 Nuovo Noleggio", "📂 Archivio"])
+t1, t2 = st.tabs(["📝 Nuovo Noleggio", "📂 Archivio"])
 
-with tab1:
-    with st.form("form_v12"):
-        st.subheader("👤 Anagrafica e Aruba (PEC/SDI)")
+with t1:
+    with st.form("form_v14"):
+        st.subheader("👤 Dati Cliente (Italiano o Straniero)")
         c1, c2, c3 = st.columns(3)
-        nome, cognome = c1.text_input("Nome"), c2.text_input("Cognome")
-        cf = c3.text_input("C.F. / P.IVA")
+        nome = c1.text_input("Nome")
+        cognome = c2.text_input("Cognome")
+        cf = c3.text_input("Codice Fiscale / ID Estero")
         
-        pec = st.text_input("PEC Cliente")
-        sdi = st.text_input("Codice Univoco (SDI)", value="0000000")
+        c4, c5 = st.columns(2)
+        pec = c4.text_input("PEC o Email")
+        sdi = c5.text_input("Codice SDI (Stranieri: 0000000)", value="0000000")
         
-        st.subheader("🛵 Dati Scooter")
-        c4, c5, c6 = st.columns(3)
-        mod, tar = c4.text_input("Modello"), c5.text_input("Targa").upper()
-        pat = c6.text_input("N. Patente")
+        st.subheader("🛵 Dati Noleggio")
+        c6, c7, c8 = st.columns(3)
+        mod = c6.text_input("Modello Scooter")
+        tar = c7.text_input("Targa").upper()
+        pat = c8.text_input("N. Patente")
         
-        c7, c8, c9 = st.columns(3)
-        prz = c7.number_input("Prezzo (€)", min_value=0.0)
-        ben = c8.selectbox("Benzina", ["1/8", "1/4", "1/2", "3/4", "Pieno"])
-        dep = c9.number_input("Deposito (€)", min_value=0.0)
+        c9, c10, c11 = st.columns(3)
+        prz = c9.number_input("Prezzo Totale (€)", min_value=0.0)
+        dep = c10.number_input("Deposito Cauzionale (€)", min_value=0.0)
+        ben = c11.selectbox("Livello Benzina", ["1/8", "1/4", "1/2", "3/4", "Pieno"])
         
-        ini, fin = st.columns(2)
-        d_ini, d_fin = ini.date_input("Inizio"), fin.date_input("Fine")
+        c12, c13 = st.columns(2)
+        ini = c12.date_input("Data Inizio")
+        fin = c13.date_input("Data Fine")
         
-        dat_n, luo_n = st.text_input("Data Nascita"), st.text_input("Luogo Nascita")
-        ind = st.text_input("Indirizzo Residenza")
+        dat_n = st.text_input("Data di Nascita")
+        luo_n = st.text_input("Luogo di Nascita")
+        ind = st.text_input("Indirizzo Residenza Completo")
 
-        st.subheader("📸 Foto Patente")
-        f_fronte = st.file_uploader("Fronte", type=['jpg','png','jpeg'])
-        f_retro = st.file_uploader("Retro", type=['jpg','png','jpeg'])
+        st.subheader("📸 Documenti")
+        f_front = st.file_uploader("Fronte Patente", type=['jpg','png','jpeg'])
+        f_back = st.file_uploader("Retro Patente", type=['jpg','png','jpeg'])
         
-        st.write("Firma Digitale Cliente")
-        canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_v12")
+        st.write("Firma Cliente")
+        canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_v14")
 
-        if st.form_submit_button("REGISTRA"):
+        if st.form_submit_button("REGISTRA NOLEGGIO"):
             # Salvataggio Firma
             img = Image.fromarray(canvas.image_data.astype("uint8"))
             buf = io.BytesIO(); img.save(buf, format="PNG")
             firma = base64.b64encode(buf.getvalue()).decode()
             
-            # Caricamento Foto Cloud
-            u_f = upload_foto(f_fronte, tar, "F")
-            u_r = upload_foto(f_retro, tar, "R")
+            # Caricamento Cloud
+            u_f = upload_foto(f_front, tar, "F")
+            u_r = upload_foto(f_back, tar, "R")
             
-            num = get_prossimo_numero()
+            # NUMERAZIONE SEQUENZIALE
+            num_sequenziale = get_prossimo_numero()
+            
             dati = {
                 "nome": nome, "cognome": cognome, "codice_fiscale": cf, "modello": mod, "targa": tar,
-                "prezzo": prz, "inizio": str(d_ini), "fine": str(d_fin), "numero_fattura": num,
+                "prezzo": prz, "inizio": str(ini), "fine": str(fin), "numero_fattura": num_sequenziale,
                 "firma": firma, "url_fronte": u_f, "url_retro": u_r, "benzina": ben,
                 "deposito": dep, "numero_patente": pat, "pec": pec, "codice_univoco": sdi,
                 "data_nascita": dat_n, "luogo_nascita": luo_n, "indirizzo_cliente": ind,
                 "data_creazione": datetime.now().isoformat()
             }
             supabase.table("contratti").insert(dati).execute()
-            st.success(f"Salvato con successo! Numero: {num}")
+            st.success(f"Contratto e Fattura N. {num_sequenziale} generati con successo!")
 
-with tab2:
-    search = st.text_input("🔍 Cerca Targa o Cognome")
+with t2:
+    st.subheader("📂 Registro Storico")
+    search = st.text_input("🔍 Cerca per Cognome o Targa")
     res = supabase.table("contratti").select("*").order("numero_fattura", desc=True).execute()
+    
     for r in res.data:
         if search.lower() in f"{r['cognome']} {r['targa']}".lower():
-            with st.expander(f"N. {r['numero_fattura']} - {r['targa']} ({r['cognome']})"):
-                c1, c2 = st.columns(2)
-                c1.download_button("📜 Contratto", genera_contratto(r), f"C_{r['id']}.pdf", key=f"c_{r['id']}")
-                c2.download_button("🚨 Vigili", genera_vigili(r), f"V_{r['id']}.pdf", key=f"v_{r['id']}")
+            with st.expander(f"Doc N. {r['numero_fattura']} - {r['cognome']} ({r['targa']})"):
+                col1, col2, col3 = st.columns(3)
+                col1.download_button("📜 Contratto", genera_contratto(r), f"Contratto_{r['id']}.pdf", key=f"c_{r['id']}")
+                col2.download_button("🧾 Fattura Aruba", genera_fattura_aruba(r), f"Fattura_{r['id']}.pdf", key=f"f_{r['id']}")
                 
                 st.write("---")
                 f1, f2 = st.columns(2)
-                if r.get("url_fronte"): f1.image(r["url_fronte"], caption="Fronte")
-                if r.get("url_retro"): f2.image(r["url_retro"], caption="Retro")
+                if r.get("url_fronte"): f1.image(r["url_fronte"], caption="Fronte Patente", width=300)
+                if r.get("url_retro"): f2.image(r["url_retro"], caption="Retro Patente", width=300)
