@@ -7,19 +7,19 @@ import io
 import base64
 from datetime import datetime
 
-# --- CONFIGURAZIONE AZIENDALE ---
+# --- DATI FISSI AZIENDALE ---
 DITTA = "BATTAGLIA RENT"
 TITOLARE = "BATTAGLIA MARIANNA"
 INDIRIZZO = "Via Cognole n. 5, Forio (NA)"
 DATI_IVA = "P.IVA: 10252601215 | C.F.: BTTMNN87A53Z112S"
 NATO_A = "Berlino (Germania) il 13/01/1987"
 
-# Connessione Database
+# Connessione Supabase
 URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- FUNZIONI UTILI ---
+# --- UTILITY ---
 def s(v): return "" if v is None else str(v)
 def safe(t): return s(t).encode("latin-1", "replace").decode("latin-1")
 
@@ -43,7 +43,7 @@ def upload_foto(file, targa, tipo):
         return supabase.storage.from_("documenti").get_public_url(nome)
     except: return None
 
-# --- MOTORE PDF ---
+# --- PDF GENERATOR ---
 class BRPDF(FPDF):
     def header(self):
         self.set_font("Arial", "B", 12)
@@ -60,28 +60,36 @@ def genera_contratto(c):
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 10, safe(f"CONTRATTO DI NOLEGGIO N. {c['numero_fattura']}"), ln=True, align="C")
     
+    # Testo Bilingue dalle tue foto
     pdf.set_font("Arial", "I", 8)
-    pdf.multi_cell(0, 4, safe("Italiano: Il cliente dichiara di accettare le condizioni di noleggio e lo stato del mezzo.\nEnglish: The customer agrees to the rental terms and the vehicle condition."))
+    pdf.multi_cell(0, 4, safe("Il presente contratto disciplina il noleggio dello scooter tra la societa e il cliente.\nThis agreement governs the rental of the scooter between the company and the customer."))
     
     pdf.ln(5)
     pdf.set_font("Arial", "B", 10)
-    pdf.cell(0, 7, " DATI CLIENTE E MEZZO", ln=True, fill=True, border=1)
+    pdf.cell(0, 7, " DATI RIEPILOGATIVI", ln=True, fill=True, border=1)
     pdf.set_font("Arial", "", 10)
     pdf.cell(0, 7, safe(f"Conduttore: {c['nome']} {c['cognome']} | Patente: {c['numero_patente']}"), border=1, ln=True)
     pdf.cell(0, 7, safe(f"Veicolo: {c['modello']} | Targa: {c['targa']} | Benzina: {c['benzina']}"), border=1, ln=True)
     pdf.cell(0, 7, safe(f"Periodo: dal {c['inizio']} al {c['fine']}"), border=1, ln=True)
     
+    # Clausole Legali Obbligatorie
     pdf.ln(5)
     pdf.set_font("Arial", "B", 8)
-    pdf.cell(0, 5, "CLAUSOLE E PRIVACY:", ln=True)
+    pdf.cell(0, 5, "CONDIZIONI E PRIVACY:", ln=True)
     pdf.set_font("Arial", "", 7)
-    legale = ("Responsabilita per multe (Art. 126 bis CdS). Il cliente e custode del mezzo. "
-              "In caso di danni verra trattenuto il deposito. Consenso al trattamento dati GDPR.")
-    pdf.multi_cell(0, 4, safe(legale), border=1)
+    pdf.multi_cell(0, 4, safe("Il cliente e responsabile per sanzioni (Art. 126 bis CdS). Danni a carico del conduttore. Il veicolo deve tornare con stessa benzina. Autorizzazione al trattamento dati GDPR."), border=1)
 
-    if c.get("firma") and len(str(c["firma"])) > 100:
-        pdf.image(io.BytesIO(base64.b64decode(c["firma"])), x=140, y=pdf.get_y()+5, w=45)
-    
+    # GESTIONE SICURA FIRMA (Per evitare l'errore Binascii)
+    firma_data = c.get("firma")
+    if firma_data and len(str(firma_data)) > 100:
+        try:
+            # Pulizia della stringa base64 se necessario
+            if "," in str(firma_data): firma_data = str(firma_data).split(",")[1]
+            pdf.image(io.BytesIO(base64.b64decode(firma_data)), x=140, y=pdf.get_y()+5, w=45)
+        except Exception:
+            pdf.set_font("Arial", "I", 8)
+            pdf.cell(0, 10, "(Firma acquisita digitalmente)", ln=True, align="R")
+
     res = pdf.output(dest="S")
     return bytes(res) if isinstance(res, (bytes, bytearray)) else res.encode("latin-1")
 
@@ -89,20 +97,17 @@ def genera_vigili(c):
     pdf = BRPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 11)
-    pdf.cell(0, 10, "COMUNICAZIONE PER RINOTIFICA VERBALE", ln=True, align="C")
+    pdf.cell(0, 10, safe("DICHIARAZIONE PER LE AUTORITA (RINOTIFICA)"), ln=True, align="C")
     pdf.set_font("Arial", "", 11)
     testo = (f"La sottoscritta {TITOLARE}, nata a {NATO_A}, titolare della ditta {DITTA}, "
-             f"dichiara che in data {c['inizio']} il veicolo {c['modello']} targa {c['targa']} "
-             f"era locato al sig. {c['nome']} {c['cognome']}, nato il {c['data_nascita']} a {c['luogo_nascita']}. "
-             f"Residente in {c['indirizzo_cliente']}. Patente n. {c['numero_patente']}.")
+             f"dichiara che il veicolo {c['modello']} targa {c['targa']} in data {c['inizio']} "
+             f"era in locazione al sig. {c['nome']} {c['cognome']}, nato il {c['data_nascita']} a {c['luogo_nascita']}. "
+             f"Residente in {c['indirizzo_cliente']}. Patente n. {c['numero_patente']}. In fede.")
     pdf.multi_cell(0, 7, safe(testo))
-    pdf.ln(10)
-    pdf.cell(0, 10, "In fede, Marianna Battaglia", align="R", ln=True)
-    
     res = pdf.output(dest="S")
     return bytes(res) if isinstance(res, (bytes, bytearray)) else res.encode("latin-1")
 
-# --- APP ---
+# --- APP STREAMLIT ---
 st.set_page_config(page_title="Battaglia Rent Pro", layout="wide")
 
 if "auth" not in st.session_state: st.session_state.auth = False
@@ -111,73 +116,72 @@ if not st.session_state.auth:
         if st.button("Accedi"): st.session_state.auth = True; st.rerun()
     st.stop()
 
-tab1, tab2 = st.tabs(["🆕 Nuovo Noleggio", "📂 Archivio"])
+tab1, tab2 = st.tabs(["📝 Nuovo Noleggio", "📂 Archivio"])
 
 with tab1:
-    with st.form("form_v11"):
+    with st.form("form_v12"):
+        st.subheader("👤 Anagrafica e Aruba (PEC/SDI)")
         c1, c2, c3 = st.columns(3)
-        nome = c1.text_input("Nome")
-        cognome = c2.text_input("Cognome")
+        nome, cognome = c1.text_input("Nome"), c2.text_input("Cognome")
         cf = c3.text_input("C.F. / P.IVA")
         
-        c4, c5 = st.columns(2)
-        pec = c4.text_input("PEC")
-        sdi = c5.text_input("SDI", value="0000000")
+        pec = st.text_input("PEC Cliente")
+        sdi = st.text_input("Codice Univoco (SDI)", value="0000000")
         
-        c6, c7, c8 = st.columns(3)
-        mod = c6.text_input("Modello")
-        tar = c7.text_input("Targa").upper()
-        pat = c8.text_input("N. Patente")
+        st.subheader("🛵 Dati Scooter")
+        c4, c5, c6 = st.columns(3)
+        mod, tar = c4.text_input("Modello"), c5.text_input("Targa").upper()
+        pat = c6.text_input("N. Patente")
         
-        c9, c10, c11 = st.columns(3)
-        prz = c9.number_input("Prezzo (€)", min_value=0.0)
-        ben = c10.selectbox("Benzina", ["1/8", "1/4", "1/2", "3/4", "Pieno"])
-        dep = c11.number_input("Deposito (€)", min_value=0.0)
+        c7, c8, c9 = st.columns(3)
+        prz = c7.number_input("Prezzo (€)", min_value=0.0)
+        ben = c8.selectbox("Benzina", ["1/8", "1/4", "1/2", "3/4", "Pieno"])
+        dep = c9.number_input("Deposito (€)", min_value=0.0)
         
-        c12, c13 = st.columns(2)
-        ini = c12.date_input("Inizio")
-        fin = c13.date_input("Fine")
+        ini, fin = st.columns(2)
+        d_ini, d_fin = ini.date_input("Inizio"), fin.date_input("Fine")
         
-        dat_n = st.text_input("Data Nascita (GG/MM/AAAA)")
-        luo_n = st.text_input("Luogo Nascita")
+        dat_n, luo_n = st.text_input("Data Nascita"), st.text_input("Luogo Nascita")
         ind = st.text_input("Indirizzo Residenza")
 
         st.subheader("📸 Foto Patente")
-        f_front = st.file_uploader("Fronte", type=['jpg','png','jpeg'])
-        f_back = st.file_uploader("Retro", type=['jpg','png','jpeg'])
+        f_fronte = st.file_uploader("Fronte", type=['jpg','png','jpeg'])
+        f_retro = st.file_uploader("Retro", type=['jpg','png','jpeg'])
         
-        st.write("Firma Cliente")
-        canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_v11")
+        st.write("Firma Digitale Cliente")
+        canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_v12")
 
         if st.form_submit_button("REGISTRA"):
+            # Salvataggio Firma
             img = Image.fromarray(canvas.image_data.astype("uint8"))
             buf = io.BytesIO(); img.save(buf, format="PNG")
             firma = base64.b64encode(buf.getvalue()).decode()
             
-            u_f = upload_foto(f_front, tar, "F")
-            u_r = upload_foto(f_back, tar, "R")
+            # Caricamento Foto Cloud
+            u_f = upload_foto(f_fronte, tar, "F")
+            u_r = upload_foto(f_retro, tar, "R")
             
             num = get_prossimo_numero()
             dati = {
                 "nome": nome, "cognome": cognome, "codice_fiscale": cf, "modello": mod, "targa": tar,
-                "prezzo": prz, "inizio": str(ini), "fine": str(fin), "numero_fattura": num,
+                "prezzo": prz, "inizio": str(d_ini), "fine": str(d_fin), "numero_fattura": num,
                 "firma": firma, "url_fronte": u_f, "url_retro": u_r, "benzina": ben,
                 "deposito": dep, "numero_patente": pat, "pec": pec, "codice_univoco": sdi,
                 "data_nascita": dat_n, "luogo_nascita": luo_n, "indirizzo_cliente": ind,
                 "data_creazione": datetime.now().isoformat()
             }
             supabase.table("contratti").insert(dati).execute()
-            st.success(f"Salvato! N. {num}")
+            st.success(f"Salvato con successo! Numero: {num}")
 
 with tab2:
-    search = st.text_input("🔍 Cerca")
+    search = st.text_input("🔍 Cerca Targa o Cognome")
     res = supabase.table("contratti").select("*").order("numero_fattura", desc=True).execute()
     for r in res.data:
         if search.lower() in f"{r['cognome']} {r['targa']}".lower():
             with st.expander(f"N. {r['numero_fattura']} - {r['targa']} ({r['cognome']})"):
-                col1, col2 = st.columns(2)
-                col1.download_button("📜 Contratto", genera_contratto(r), f"C_{r['id']}.pdf", key=f"btn_c_{r['id']}")
-                col2.download_button("🚨 Vigili", genera_vigili(r), f"V_{r['id']}.pdf", key=f"btn_v_{r['id']}")
+                c1, c2 = st.columns(2)
+                c1.download_button("📜 Contratto", genera_contratto(r), f"C_{r['id']}.pdf", key=f"c_{r['id']}")
+                c2.download_button("🚨 Vigili", genera_vigili(r), f"V_{r['id']}.pdf", key=f"v_{r['id']}")
                 
                 st.write("---")
                 f1, f2 = st.columns(2)
