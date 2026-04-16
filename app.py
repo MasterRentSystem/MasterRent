@@ -122,48 +122,73 @@ if not st.session_state.auth:
 
 t1, t2 = st.tabs(["📝 Nuovo Noleggio", "📂 Archivio"])
 with t1:
-    with st.form("form_v23"):
-        c1, c2, c3 = st.columns(3)
-        nome, cognome, naz = c1.text_input("Nome"), c2.text_input("Cognome"), c3.text_input("Nazionalita")
-        c4, c5, c6 = st.columns(3)
-        cf, tel, pec = c4.text_input("C.F. / ID"), c5.text_input("Telefono"), c6.text_input("Email / PEC")
-        c7, c8, c9 = st.columns(3)
-        dat_n, luo_n, ind = c7.text_input("Data Nascita"), c8.text_input("Luogo Nascita"), c9.text_input("Residenza")
-        m1, m2, m3 = st.columns(3)
-        mod, tar, pat = m1.text_input("Modello"), m2.text_input("Targa").upper(), m3.text_input("N. Patente")
-        d1, d2, d3 = st.columns(3)
-        prezzo, deposito, sdi = d1.number_input("Prezzo"), d2.number_input("Deposito"), d3.text_input("SDI", value="0000000")
-        ini, fin = st.date_input("Inizio"), st.date_input("Fine")
-        f1, f2 = st.file_uploader("Fronte Patente"), st.file_uploader("Retro Patente")
-        
-        st.write("Firma Cliente")
-        canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_v23")
-        
-        # --- CHECKBOX PRIVACY ---
-        accetto = st.checkbox("Il cliente dichiara di aver letto e accettato le condizioni generali di noleggio e l'informativa privacy.")
-        
-        if st.form_submit_button("REGISTRA"):
-            if not accetto:
-                st.warning("⚠️ Devi spuntare la casella di accettazione per procedere.")
-            else:
-                try:
+    # Campi fuori dal form per maggiore stabilità
+    c1, c2, c3 = st.columns(3)
+    nome = c1.text_input("Nome")
+    cognome = c2.text_input("Cognome")
+    naz = c3.text_input("Nazionalita")
+    
+    c4, c5, c6 = st.columns(3)
+    cf = c4.text_input("C.F. / ID")
+    tel = c5.text_input("Telefono")
+    pec = c6.text_input("Email / PEC")
+    
+    c7, c8, c9 = st.columns(3)
+    dat_n = c7.text_input("Data Nascita")
+    luo_n = c8.text_input("Luogo Nascita")
+    ind = c9.text_input("Residenza")
+    
+    m1, m2, m3 = st.columns(3)
+    mod = m1.text_input("Modello")
+    tar = m2.text_input("Targa").upper()
+    pat = m3.text_input("N. Patente")
+    
+    d1, d2, d3 = st.columns(3)
+    prezzo = d1.number_input("Prezzo", min_value=0.0)
+    deposito = d2.number_input("Deposito", min_value=0.0)
+    sdi = d3.text_input("SDI", value="0000000")
+    
+    ini = st.date_input("Inizio")
+    fin = st.date_input("Fine")
+    
+    f1 = st.file_uploader("Fronte Patente")
+    f2 = st.file_uploader("Retro Patente")
+    
+    st.write("### Firma Cliente")
+    canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_v24")
+    
+    # IL CHECKBOX ORA È BEN VISIBILE QUI
+    st.markdown("---")
+    accetto = st.checkbox("*IL CLIENTE DICHIARA DI AVER LETTO E ACCETTATO LE CONDIZIONI DI NOLEGGIO E LA PRIVACY.*")
+    
+    if st.button("💾 REGISTRA NOLEGGIO"):
+        if not accetto:
+            st.error("❌ Devi spuntare la casella di accettazione per salvare!")
+        elif not nome or not cognome or not tar:
+            st.error("❌ Nome, Cognome e Targa sono obbligatori!")
+        else:
+            try:
+                with st.spinner("Salvataggio in corso..."):
                     img = Image.fromarray(canvas.image_data.astype("uint8"))
                     buf = io.BytesIO(); img.save(buf, format="PNG")
                     firma = base64.b64encode(buf.getvalue()).decode()
                     u_f, u_r = upload_foto(f1, tar, "F"), upload_foto(f2, tar, "R")
                     num = get_prossimo_numero()
+                    
                     dati = {"nome": nome, "cognome": cognome, "codice_fiscale": cf, "modello": mod, "targa": tar, "prezzo": prezzo, "deposito": deposito, "numero_fattura": num, "firma": firma, "url_fronte": u_f, "url_retro": u_r, "pec": pec, "codice_univoco": sdi, "data_nascita": dat_n, "luogo_nascita": luo_n, "indirizzo_cliente": ind, "inizio": str(ini), "fine": str(fin), "numero_patente": pat, "nazionalita": naz, "telefono": tel}
+                    
                     supabase.table("contratti").insert(dati).execute()
-                    st.success(f"Contratto {num} salvato con successo!")
-                except Exception as e: st.error(f"Errore: {e}")
+                    st.success(f"✅ Contratto N. {num} salvato correttamente!")
+            except Exception as e: 
+                st.error(f"Errore tecnico: {e}")
 
 with t2:
-    search = st.text_input("🔍 Cerca")
+    search = st.text_input("🔍 Cerca per Cognome o Targa")
     res = supabase.table("contratti").select("*").order("numero_fattura", desc=True).execute()
     for r in res.data:
         if search.lower() in f"{s(r['cognome'])} {s(r['targa'])}".lower():
-            with st.expander(f"N. {r['numero_fattura']} - {r['cognome']}"):
+            with st.expander(f"N. {r['numero_fattura']} - {r['cognome']} ({r['targa']})"):
                 ca, cb, cc = st.columns(3)
-                ca.download_button("📜 Contratto", genera_contratto_legale(r), f"C_{r['id']}.pdf")
-                cb.download_button("🧾 Fattura", genera_fattura_completa(r), f"F_{r['id']}.pdf")
-                cc.download_button("🚨 Vigili", genera_modulo_vigili_legale(r), f"V_{r['id']}.pdf")
+                ca.download_button("📜 Contratto", genera_contratto_legale(r), f"C_{r['id']}.pdf", key=f"ca_{r['id']}")
+                cb.download_button("🧾 Fattura", genera_fattura_completa(r), f"F_{r['id']}.pdf", key=f"fb_{r['id']}")
+                cc.download_button("🚨 Vigili", genera_modulo_vigili_legale(r), f"V_{r['id']}.pdf", key=f"vc_{r['id']}")
