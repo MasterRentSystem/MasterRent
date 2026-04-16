@@ -122,72 +122,69 @@ if not st.session_state.auth:
 
 t1, t2 = st.tabs(["📝 Nuovo Noleggio", "📂 Archivio"])
 with t1:
-    # Campi fuori dal form per maggiore stabilità
     c1, c2, c3 = st.columns(3)
     nome = c1.text_input("Nome")
     cognome = c2.text_input("Cognome")
     naz = c3.text_input("Nazionalita")
-    
     c4, c5, c6 = st.columns(3)
     cf = c4.text_input("C.F. / ID")
     tel = c5.text_input("Telefono")
     pec = c6.text_input("Email / PEC")
-    
     c7, c8, c9 = st.columns(3)
     dat_n = c7.text_input("Data Nascita")
     luo_n = c8.text_input("Luogo Nascita")
     ind = c9.text_input("Residenza")
-    
     m1, m2, m3 = st.columns(3)
     mod = m1.text_input("Modello")
     tar = m2.text_input("Targa").upper()
     pat = m3.text_input("N. Patente")
-    
     d1, d2, d3 = st.columns(3)
     prezzo = d1.number_input("Prezzo", min_value=0.0)
     deposito = d2.number_input("Deposito", min_value=0.0)
     sdi = d3.text_input("SDI", value="0000000")
-    
     ini = st.date_input("Inizio")
     fin = st.date_input("Fine")
-    
     f1 = st.file_uploader("Fronte Patente")
     f2 = st.file_uploader("Retro Patente")
     
     st.write("### Firma Cliente")
-    canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_v24")
-    
-    # IL CHECKBOX ORA È BEN VISIBILE QUI
+    canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_v25")
     st.markdown("---")
     accetto = st.checkbox("*IL CLIENTE DICHIARA DI AVER LETTO E ACCETTATO LE CONDIZIONI DI NOLEGGIO E LA PRIVACY.*")
     
     if st.button("💾 REGISTRA NOLEGGIO"):
-        if not accetto:
-            st.error("❌ Devi spuntare la casella di accettazione per salvare!")
-        elif not nome or not cognome or not tar:
-            st.error("❌ Nome, Cognome e Targa sono obbligatori!")
+        if not accetto: st.error("❌ Spunta la casella privacy!")
+        elif not nome or not cognome or not tar: st.error("❌ Nome, Cognome e Targa obbligatori!")
         else:
             try:
-                with st.spinner("Salvataggio in corso..."):
+                with st.spinner("Salvataggio..."):
                     img = Image.fromarray(canvas.image_data.astype("uint8"))
                     buf = io.BytesIO(); img.save(buf, format="PNG")
                     firma = base64.b64encode(buf.getvalue()).decode()
                     u_f, u_r = upload_foto(f1, tar, "F"), upload_foto(f2, tar, "R")
                     num = get_prossimo_numero()
-                    
                     dati = {"nome": nome, "cognome": cognome, "codice_fiscale": cf, "modello": mod, "targa": tar, "prezzo": prezzo, "deposito": deposito, "numero_fattura": num, "firma": firma, "url_fronte": u_f, "url_retro": u_r, "pec": pec, "codice_univoco": sdi, "data_nascita": dat_n, "luogo_nascita": luo_n, "indirizzo_cliente": ind, "inizio": str(ini), "fine": str(fin), "numero_patente": pat, "nazionalita": naz, "telefono": tel}
-                    
                     supabase.table("contratti").insert(dati).execute()
-                    st.success(f"✅ Contratto N. {num} salvato correttamente!")
-            except Exception as e: 
-                st.error(f"Errore tecnico: {e}")
+                    st.success(f"✅ Registrato! N. {num}")
+            except Exception as e: st.error(f"Errore: {e}")
 
 with t2:
-    search = st.text_input("🔍 Cerca per Cognome o Targa")
+    search = st.text_input("🔍 Cerca per Cognome, Targa o Data (AAAA-MM-DD)")
     res = supabase.table("contratti").select("*").order("numero_fattura", desc=True).execute()
     for r in res.data:
-        if search.lower() in f"{s(r['cognome'])} {s(r['targa'])}".lower():
-            with st.expander(f"N. {r['numero_fattura']} - {r['cognome']} ({r['targa']})"):
+        # La ricerca ora controlla Cognome, Targa e Data di Inizio
+        if search.lower() in f"{s(r['cognome'])} {s(r['targa'])} {s(r['inizio'])}".lower():
+            with st.expander(f"N. {r['numero_fattura']} - {r['cognome']} ({r['targa']}) - {r['inizio']}"):
+                # Sezione Foto
+                st.write("### Documenti d'identità")
+                f_col1, f_col2 = st.columns(2)
+                if r.get('url_fronte'): f_col1.image(r['url_fronte'], caption="Fronte Patente", use_container_width=True)
+                else: f_col1.info("Nessuna foto fronte")
+                if r.get('url_retro'): f_col2.image(r['url_retro'], caption="Retro Patente", use_container_width=True)
+                else: f_col2.info("Nessuna foto retro")
+                
+                st.markdown("---")
+                # Sezione Download
                 ca, cb, cc = st.columns(3)
                 ca.download_button("📜 Contratto", genera_contratto_legale(r), f"C_{r['id']}.pdf", key=f"ca_{r['id']}")
                 cb.download_button("🧾 Fattura", genera_fattura_completa(r), f"F_{r['id']}.pdf", key=f"fb_{r['id']}")
