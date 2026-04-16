@@ -55,6 +55,8 @@ def genera_contratto_legale(c):
     pdf = BusinessPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 14); pdf.cell(0, 10, safe(f"CONTRATTO DI NOLEGGIO N. {c['numero_fattura']}"), ln=True, align="C")
+    
+    # Anagrafica
     pdf.ln(5); pdf.set_font("Arial", "B", 10); pdf.cell(0, 7, " ANAGRAFICA CLIENTE", ln=True, fill=True, border=1)
     pdf.set_font("Arial", "", 9)
     pdf.cell(95, 7, safe(f"Nome: {c['nome']} {c['cognome']}"), border="LR")
@@ -64,6 +66,8 @@ def genera_contratto_legale(c):
     pdf.cell(190, 7, safe(f"Residenza: {c.get('indirizzo_cliente','')}"), border="LR", ln=True)
     pdf.cell(95, 7, safe(f"Tel: {c.get('telefono','')}"), border="LRB")
     pdf.cell(95, 7, safe(f"Email/PEC: {c.get('pec','')}"), border="RB", ln=True)
+    
+    # Dati Noleggio
     pdf.ln(3); pdf.set_font("Arial", "B", 10); pdf.cell(0, 7, " DATI NOLEGGIO", ln=True, fill=True, border=1)
     pdf.set_font("Arial", "", 9)
     pdf.cell(63, 7, safe(f"Mezzo: {c['modello']}"), border=1)
@@ -71,7 +75,21 @@ def genera_contratto_legale(c):
     pdf.cell(64, 7, safe(f"Patente: {c['numero_patente']}"), border=1, ln=True)
     pdf.cell(95, 7, safe(f"Inizio: {c['inizio']}  Fine: {c['fine']}"), border=1)
     pdf.cell(95, 7, safe(f"Prezzo: {c['prezzo']} EUR"), border=1, ln=True)
-    pdf.ln(10); pdf.set_font("Arial", "B", 9); pdf.cell(0, 7, "FIRMA DEL CLIENTE", ln=True)
+
+    # CLAUSOLE IMPORTANTI (GDPR e ASSICURAZIONE)
+    pdf.ln(5); pdf.set_font("Arial", "B", 10); pdf.cell(0, 7, " CONDIZIONI ESSENZIALI DI NOLEGGIO", ln=True, fill=True, border=1)
+    pdf.set_font("Arial", "", 8)
+    clausole = (
+        "1. ASSICURAZIONE: Il veicolo e coperto da assicurazione R.C.A. solo verso terzi. "
+        "2. DANNI E FURTO: Il cliente e responsabile di qualunque danno al veicolo, furto totale o parziale, incendio o smarrimento chiavi/accessori. "
+        "Tali costi sono integralmente a carico del cliente. 3. CASCO: Il cliente ha l'obbligo di indossare il casco e rispettare il Codice della Strada. "
+        "4. MULTE: Tutte le infrazioni commesse durante il noleggio sono a carico del cliente. "
+        "5. PRIVACY: Il cliente autorizza il trattamento dei dati personali ai sensi del GDPR (Reg. UE 2016/679)."
+    )
+    pdf.multi_cell(0, 4, safe(clausole), border=1)
+
+    # Firma
+    pdf.ln(5); pdf.set_font("Arial", "B", 9); pdf.cell(0, 7, "FIRMA DEL CLIENTE (per accettazione clausole)", ln=True)
     y_f = pdf.get_y(); pdf.cell(100, 25, "", border=1)
     pdf.cell(90, 25, safe(f"Data: {datetime.now().strftime('%d/%m/%Y')}"), border=1, ln=True)
     firma = c.get("firma")
@@ -83,33 +101,26 @@ def genera_contratto_legale(c):
     return bytes(pdf.output(dest="S"))
 
 def genera_modulo_vigili_legale(c):
-    pdf = BusinessPDF()
-    pdf.add_page()
+    pdf = BusinessPDF(); pdf.add_page()
     pdf.set_font("Arial", "", 11); pdf.cell(0, 10, safe("Spett. le Polizia Locale"), ln=True, align="R")
-    pdf.ln(5); pdf.set_font("Arial", "B", 10); pdf.cell(0, 7, safe("OGGETTO: RIFERIMENTO ACCERTAMENTO VIOLAZIONE - COMUNICAZIONE DATI"), ln=True)
+    pdf.ln(5); pdf.set_font("Arial", "B", 10); pdf.cell(0, 7, safe("OGGETTO: COMUNICAZIONE DATI CONDUCENTE PER RINOTIFICA"), ln=True)
     pdf.ln(5); pdf.set_font("Arial", "", 10)
     testo = (f"La sottoscritta BATTAGLIA MARIANNA, titolare di {DITTA}, dichiara ai sensi della l. 445/2000 che il veicolo {c['modello']} "
              f"targa {c['targa']} era locato a {c['nome']} {c['cognome']}, nato a {c.get('luogo_nascita','')} il {c.get('data_nascita','')}, "
-             f"residente in {c.get('indirizzo_cliente','')}, nazionalita {c.get('nazionalita','')}. Patente n. {c['numero_patente']}.")
-    pdf.multi_cell(0, 6, safe(testo)); pdf.ln(5); pdf.multi_cell(0, 6, safe("Si richiede la rinotifica del verbale. Si allega copia conforme del contratto."))
-    pdf.ln(15); pdf.cell(0, 10, "In fede, Marianna Battaglia", align="R", ln=True)
+             f"residente in {c.get('indirizzo_cliente','')}. Patente n. {c['numero_patente']}. Si richiede la rinotifica del verbale.")
+    pdf.multi_cell(0, 6, safe(testo)); pdf.ln(15); pdf.cell(0, 10, "In fede, Marianna Battaglia", align="R", ln=True)
     return bytes(pdf.output(dest="S"))
 
 def genera_fattura_completa(c):
-    pdf = BusinessPDF()
-    pdf.add_page()
+    pdf = BusinessPDF(); pdf.add_page()
     pdf.set_font("Arial", "B", 14); pdf.cell(0, 10, safe(f"FATTURA N. {c['numero_fattura']}"), ln=True, align="C", border="B")
     pdf.ln(10); pdf.set_font("Arial", "B", 9); pdf.cell(95, 7, "CEDENTE", border=1, fill=True); pdf.cell(95, 7, "CESSIONARIO", border=1, fill=True, ln=True)
-    pdf.set_font("Arial", "", 9)
-    pdf.multi_cell(95, 5, safe(f"{DITTA}\n{TITOLARE}\n{INDIRIZZO}\n{DATI_FISCALI}"), border=1)
-    pdf.set_xy(105, pdf.get_y()-20)
-    pdf.multi_cell(95, 5, safe(f"{c['nome']} {c['cognome']}\nCF: {c['codice_fiscale']}\nPEC: {c.get('pec','')}\nSDI: {c.get('codice_univoco','0000000')}"), border=1)
+    pdf.set_font("Arial", "", 9); pdf.multi_cell(95, 5, safe(f"{DITTA}\n{TITOLARE}\n{INDIRIZZO}\n{DATI_FISCALI}"), border=1)
+    pdf.set_xy(105, pdf.get_y()-20); pdf.multi_cell(95, 5, safe(f"{c['nome']} {c['cognome']}\nCF: {c['codice_fiscale']}\nSDI: {c.get('codice_univoco','0000000')}"), border=1)
     pdf.ln(15); p = float(c['prezzo']); imp = p/1.22; iva = p-imp
     pdf.set_font("Arial", "B", 10); pdf.cell(110, 8, "DESCRIZIONE", border=1); pdf.cell(40, 8, "IVA", border=1); pdf.cell(40, 8, "TOTALE", border=1, ln=True)
-    pdf.set_font("Arial", "", 10); pdf.cell(110, 10, safe(f"Noleggio Scooter {c['modello']} ({c['targa']})"), border=1); pdf.cell(40, 10, "22%", border=1); pdf.cell(40, 10, f"{p:.2f} EUR", border=1, ln=True)
-    pdf.ln(5); pdf.cell(150, 7, "IMPONIBILE:", align="R"); pdf.cell(40, 7, f"{imp:.2f}", border=1, ln=True)
-    pdf.cell(150, 7, "IVA 22%:", align="R"); pdf.cell(40, 7, f"{iva:.2f}", border=1, ln=True)
-    pdf.cell(150, 7, "TOTALE FATTURA:", align="R"); pdf.cell(40, 7, f"{p:.2f} EUR", border=1, ln=True)
+    pdf.set_font("Arial", "", 10); pdf.cell(110, 10, safe(f"Noleggio {c['modello']} ({c['targa']})"), border=1); pdf.cell(40, 10, "22%", border=1); pdf.cell(40, 10, f"{p:.2f} EUR", border=1, ln=True)
+    pdf.ln(5); pdf.cell(150, 7, "TOTALE FATTURA:", align="R"); pdf.cell(40, 7, f"{p:.2f} EUR", border=1, ln=True)
     return bytes(pdf.output(dest="S"))
 
 # --- APP ---
@@ -123,69 +134,49 @@ if not st.session_state.auth:
 t1, t2 = st.tabs(["📝 Nuovo Noleggio", "📂 Archivio"])
 with t1:
     c1, c2, c3 = st.columns(3)
-    nome = c1.text_input("Nome")
-    cognome = c2.text_input("Cognome")
-    naz = c3.text_input("Nazionalita")
+    nome, cognome, naz = c1.text_input("Nome"), c2.text_input("Cognome"), c3.text_input("Nazionalita")
     c4, c5, c6 = st.columns(3)
-    cf = c4.text_input("C.F. / ID")
-    tel = c5.text_input("Telefono")
-    pec = c6.text_input("Email / PEC")
+    cf, tel, pec = c4.text_input("C.F. / ID"), c5.text_input("Telefono"), c6.text_input("Email / PEC")
     c7, c8, c9 = st.columns(3)
-    dat_n = c7.text_input("Data Nascita")
-    luo_n = c8.text_input("Luogo Nascita")
-    ind = c9.text_input("Residenza")
+    dat_n, luo_n, ind = c7.text_input("Data Nascita"), c8.text_input("Luogo Nascita"), c9.text_input("Residenza")
     m1, m2, m3 = st.columns(3)
-    mod = m1.text_input("Modello")
-    tar = m2.text_input("Targa").upper()
-    pat = m3.text_input("N. Patente")
+    mod, tar, pat = m1.text_input("Modello"), m2.text_input("Targa").upper(), m3.text_input("N. Patente")
     d1, d2, d3 = st.columns(3)
-    prezzo = d1.number_input("Prezzo", min_value=0.0)
-    deposito = d2.number_input("Deposito", min_value=0.0)
-    sdi = d3.text_input("SDI", value="0000000")
-    ini = st.date_input("Inizio")
-    fin = st.date_input("Fine")
-    f1 = st.file_uploader("Fronte Patente")
-    f2 = st.file_uploader("Retro Patente")
-    
+    prezzo, deposito, sdi = d1.number_input("Prezzo"), d2.number_input("Deposito"), d3.text_input("SDI", value="0000000")
+    ini, fin = st.date_input("Inizio"), st.date_input("Fine")
+    f1, f2 = st.file_uploader("Fronte Patente"), st.file_uploader("Retro Patente")
     st.write("### Firma Cliente")
-    canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_v25")
+    canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_v26")
     st.markdown("---")
-    accetto = st.checkbox("*IL CLIENTE DICHIARA DI AVER LETTO E ACCETTATO LE CONDIZIONI DI NOLEGGIO E LA PRIVACY.*")
+    accetto = st.checkbox("*Dichiaro di aver letto le clausole su ASSICURAZIONE, FURTO/DANNI e PRIVACY.*")
     
-    if st.button("💾 REGISTRA NOLEGGIO"):
-        if not accetto: st.error("❌ Spunta la casella privacy!")
-        elif not nome or not cognome or not tar: st.error("❌ Nome, Cognome e Targa obbligatori!")
+    if st.button("💾 REGISTRA"):
+        if not accetto: st.error("❌ Devi accettare le clausole!")
+        elif not nome or not tar: st.error("❌ Dati mancanti!")
         else:
             try:
-                with st.spinner("Salvataggio..."):
-                    img = Image.fromarray(canvas.image_data.astype("uint8"))
-                    buf = io.BytesIO(); img.save(buf, format="PNG")
-                    firma = base64.b64encode(buf.getvalue()).decode()
-                    u_f, u_r = upload_foto(f1, tar, "F"), upload_foto(f2, tar, "R")
-                    num = get_prossimo_numero()
-                    dati = {"nome": nome, "cognome": cognome, "codice_fiscale": cf, "modello": mod, "targa": tar, "prezzo": prezzo, "deposito": deposito, "numero_fattura": num, "firma": firma, "url_fronte": u_f, "url_retro": u_r, "pec": pec, "codice_univoco": sdi, "data_nascita": dat_n, "luogo_nascita": luo_n, "indirizzo_cliente": ind, "inizio": str(ini), "fine": str(fin), "numero_patente": pat, "nazionalita": naz, "telefono": tel}
-                    supabase.table("contratti").insert(dati).execute()
-                    st.success(f"✅ Registrato! N. {num}")
+                img = Image.fromarray(canvas.image_data.astype("uint8"))
+                buf = io.BytesIO(); img.save(buf, format="PNG")
+                firma = base64.b64encode(buf.getvalue()).decode()
+                u_f, u_r = upload_foto(f1, tar, "F"), upload_foto(f2, tar, "R")
+                num = get_prossimo_numero()
+                dati = {"nome": nome, "cognome": cognome, "codice_fiscale": cf, "modello": mod, "targa": tar, "prezzo": prezzo, "deposito": deposito, "numero_fattura": num, "firma": firma, "url_fronte": u_f, "url_retro": u_r, "pec": pec, "codice_univoco": sdi, "data_nascita": dat_n, "luogo_nascita": luo_n, "indirizzo_cliente": ind, "inizio": str(ini), "fine": str(fin), "numero_patente": pat, "nazionalita": naz, "telefono": tel}
+                supabase.table("contratti").insert(dati).execute()
+                st.success(f"✅ Registrato! N. {num}")
             except Exception as e: st.error(f"Errore: {e}")
 
 with t2:
-    search = st.text_input("🔍 Cerca per Cognome, Targa o Data (AAAA-MM-DD)")
+    search = st.text_input("🔍 Cerca")
     res = supabase.table("contratti").select("*").order("numero_fattura", desc=True).execute()
     for r in res.data:
-        # La ricerca ora controlla Cognome, Targa e Data di Inizio
         if search.lower() in f"{s(r['cognome'])} {s(r['targa'])} {s(r['inizio'])}".lower():
-            with st.expander(f"N. {r['numero_fattura']} - {r['cognome']} ({r['targa']}) - {r['inizio']}"):
-                # Sezione Foto
-                st.write("### Documenti d'identità")
+            with st.expander(f"N. {r['numero_fattura']} - {r['cognome']} ({r['targa']})"):
+                st.write("### Documenti")
                 f_col1, f_col2 = st.columns(2)
-                if r.get('url_fronte'): f_col1.image(r['url_fronte'], caption="Fronte Patente", use_container_width=True)
-                else: f_col1.info("Nessuna foto fronte")
-                if r.get('url_retro'): f_col2.image(r['url_retro'], caption="Retro Patente", use_container_width=True)
-                else: f_col2.info("Nessuna foto retro")
-                
+                if r.get('url_fronte'): f_col1.image(r['url_fronte'], caption="Fronte", use_container_width=True)
+                if r.get('url_retro'): f_col2.image(r['url_retro'], caption="Retro", use_container_width=True)
                 st.markdown("---")
-                # Sezione Download
                 ca, cb, cc = st.columns(3)
-                ca.download_button("📜 Contratto", genera_contratto_legale(r), f"C_{r['id']}.pdf", key=f"ca_{r['id']}")
-                cb.download_button("🧾 Fattura", genera_fattura_completa(r), f"F_{r['id']}.pdf", key=f"fb_{r['id']}")
-                cc.download_button("🚨 Vigili", genera_modulo_vigili_legale(r), f"V_{r['id']}.pdf", key=f"vc_{r['id']}")
+                ca.download_button("📜 Contratto", genera_contratto_legale(r), f"C_{r['id']}.pdf", key=f"c_{r['id']}")
+                cb.download_button("🧾 Fattura", genera_fattura_completa(r), f"F_{r['id']}.pdf", key=f"f_{r['id']}")
+                cc.download_button("🚨 Vigili", genera_modulo_vigili_legale(r), f"V_{r['id']}.pdf", key=f"v_{r['id']}")
