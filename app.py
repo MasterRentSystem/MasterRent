@@ -48,7 +48,7 @@ def upload_media(file, targa, tipo):
         return supabase.storage.from_("documenti").get_public_url(nome_file)
     except: return None
 
-# --- GENERAZIONE PDF ---
+# --- GENERAZIONE PDF (VERSIONE ORIGINALE COMPLETA) ---
 class BusinessPDF(FPDF):
     def header(self):
         self.set_font("Arial", "B", 12)
@@ -63,7 +63,7 @@ def genera_contratto_legale(c):
     pdf.add_page()
     pdf.set_font("Arial", "B", 14); pdf.cell(0, 10, safe(f"CONTRATTO DI NOLEGGIO N. {c['numero_fattura']}"), ln=True, align="C")
     
-    # Anagrafica Cliente
+    # Sezione Anagrafica (Tabella Completa)
     pdf.ln(5); pdf.set_font("Arial", "B", 10); pdf.cell(0, 7, " ANAGRAFICA CLIENTE", ln=True, fill=True, border=1)
     pdf.set_font("Arial", "", 9)
     pdf.cell(95, 7, safe(f"Nome: {c['nome']} {c['cognome']}"), border="LR")
@@ -74,7 +74,7 @@ def genera_contratto_legale(c):
     pdf.cell(95, 7, safe(f"Tel: {c.get('telefono','')}"), border="LRB")
     pdf.cell(95, 7, safe(f"Email/PEC: {c.get('pec','')}"), border="RB", ln=True)
     
-    # Dati Noleggio
+    # Sezione Dati Noleggio
     pdf.ln(3); pdf.set_font("Arial", "B", 10); pdf.cell(0, 7, " DATI NOLEGGIO", ln=True, fill=True, border=1)
     pdf.set_font("Arial", "", 9)
     pdf.cell(63, 7, safe(f"Mezzo: {c['modello']}"), border=1)
@@ -83,7 +83,7 @@ def genera_contratto_legale(c):
     pdf.cell(95, 7, safe(f"Inizio: {c['inizio']}  Fine: {c['fine']}"), border=1)
     pdf.cell(95, 7, safe(f"Prezzo: {c['prezzo']} EUR"), border=1, ln=True)
 
-    # Clausole Legali Integrali
+    # Clausole Legali Originali
     pdf.ln(5); pdf.set_font("Arial", "B", 10); pdf.cell(0, 7, " CONDIZIONI ESSENZIALI DI NOLEGGIO", ln=True, fill=True, border=1)
     pdf.set_font("Arial", "", 8)
     clausole = (
@@ -95,7 +95,7 @@ def genera_contratto_legale(c):
     )
     pdf.multi_cell(0, 4, safe(clausole), border=1)
 
-    # Firme
+    # Firma Originale
     pdf.ln(5); pdf.set_font("Arial", "B", 9); pdf.cell(0, 7, "FIRMA DEL CLIENTE (per accettazione clausole)", ln=True)
     y_f = pdf.get_y(); pdf.cell(100, 25, "", border=1)
     pdf.cell(90, 25, safe(f"Data: {datetime.now().strftime('%d/%m/%Y')}"), border=1, ln=True)
@@ -130,7 +130,7 @@ def genera_fattura_completa(c):
     pdf.ln(5); pdf.cell(150, 7, "TOTALE FATTURA:", align="R"); pdf.cell(40, 7, f"{p:.2f} EUR", border=1, ln=True)
     return bytes(pdf.output(dest="S"))
 
-# --- APP STREAMLIT ---
+# --- INTERFACCIA STREAMLIT ---
 st.set_page_config(page_title="Battaglia Rent Pro", layout="wide")
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
@@ -141,7 +141,7 @@ if not st.session_state.auth:
 t1, t2 = st.tabs(["📝 Nuovo Noleggio", "📂 Archivio"])
 
 with t1:
-    with st.form("form_completo", clear_on_submit=True):
+    with st.form("main_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         nome, cognome, naz = c1.text_input("Nome"), c2.text_input("Cognome"), c3.text_input("Nazionalita")
         c4, c5, c6 = st.columns(3)
@@ -154,8 +154,8 @@ with t1:
         prezzo, deposito, sdi = d1.number_input("Prezzo"), d2.number_input("Deposito"), d3.text_input("SDI", value="0000000")
         ini, fin = st.date_input("Inizio"), st.date_input("Fine")
         
-        st.subheader("📹 Stato Veicolo & Documenti")
-        video_mezzo = st.file_uploader("Video o Foto Danni (Stato Motorino)", type=["mp4", "mov", "jpg", "png"])
+        st.subheader("📹 Stato Veicolo (Video/Foto Danni)")
+        video_mezzo = st.file_uploader("Carica Stato Motorino", type=["mp4", "mov", "jpg", "png"])
         f1, f2 = st.file_uploader("Fronte Patente"), st.file_uploader("Retro Patente")
         
         st.write("### Firma Cliente")
@@ -163,20 +163,21 @@ with t1:
         accetto = st.checkbox("Dichiaro di aver letto e accettato le condizioni di noleggio.")
         
         if st.form_submit_button("💾 REGISTRA NOLEGGIO"):
-            if not accetto or not nome or not tar: st.error("❌ Accetta le clausole e compila i campi obbligatori!")
+            if not accetto or not nome or not tar: st.error("❌ Errore: Compila i campi obbligatori!")
             else:
-                try:
-                    img = Image.fromarray(canvas.image_data.astype("uint8"))
-                    buf = io.BytesIO(); img.save(buf, format="PNG")
-                    firma = base64.b64encode(buf.getvalue()).decode()
-                    u_v = upload_media(video_mezzo, tar, "VIDEO")
-                    u_f = upload_media(f1, tar, "F")
-                    u_r = upload_media(f2, tar, "R")
-                    num = get_prossimo_numero()
-                    dati = {"nome": nome, "cognome": cognome, "codice_fiscale": cf, "modello": mod, "targa": tar, "prezzo": prezzo, "deposito": deposito, "numero_fattura": num, "firma": firma, "url_video": u_v, "url_fronte": u_f, "url_retro": u_r, "pec": pec, "codice_univoco": sdi, "data_nascita": dat_n, "luogo_nascita": luo_n, "indirizzo_cliente": ind, "inizio": str(ini), "fine": str(fin), "numero_patente": pat, "nazionalita": naz, "telefono": tel}
-                    supabase.table("contratti").insert(dati).execute()
-                    st.success(f"✅ Noleggio N. {num} salvato con successo!")
-                except Exception as e: st.error(f"Errore: {e}")
+                with st.spinner("Salvataggio in corso..."):
+                    try:
+                        img = Image.fromarray(canvas.image_data.astype("uint8"))
+                        buf = io.BytesIO(); img.save(buf, format="PNG")
+                        firma = base64.b64encode(buf.getvalue()).decode()
+                        u_v = upload_media(video_mezzo, tar, "VIDEO")
+                        u_f = upload_media(f1, tar, "F")
+                        u_r = upload_media(f2, tar, "R")
+                        num = get_prossimo_numero()
+                        dati = {"nome": nome, "cognome": cognome, "codice_fiscale": cf, "modello": mod, "targa": tar, "prezzo": prezzo, "deposito": deposito, "numero_fattura": num, "firma": firma, "url_video": u_v, "url_fronte": u_f, "url_retro": u_r, "pec": pec, "codice_univoco": sdi, "data_nascita": dat_n, "luogo_nascita": luo_n, "indirizzo_cliente": ind, "inizio": str(ini), "fine": str(fin), "numero_patente": pat, "nazionalita": naz, "telefono": tel}
+                        supabase.table("contratti").insert(dati).execute()
+                        st.success(f"✅ Noleggio N. {num} registrato!")
+                    except Exception as e: st.error(f"Errore: {e}")
 
 with t2:
     search = st.text_input("🔍 Cerca per Cognome o Targa")
@@ -188,15 +189,15 @@ with t2:
                 if r.get('url_video'):
                     if any(ext in r['url_video'].lower() for ext in ['.mp4', '.mov']): st.video(r['url_video'])
                     else: st.image(r['url_video'], use_container_width=True)
-                else: st.info("Nessun video registrato.")
+                else: st.info("Nessun file di stato veicolo caricato.")
 
-                st.write("### 🪪 Documenti")
+                st.write("### 🪪 Documenti Patente")
                 c_p1, c_p2 = st.columns(2)
                 if r.get('url_fronte'): c_p1.image(r['url_fronte'], caption="Fronte")
                 if r.get('url_retro'): c_p2.image(r['url_retro'], caption="Retro")
                 
                 st.markdown("---")
                 ca, cb, cc = st.columns(3)
-                ca.download_button("📜 Contratto", genera_contratto_legale(r), f"Contratto_{r['id']}.pdf", key=f"c_{r['id']}")
-                cb.download_button("🧾 Fattura", genera_fattura_completa(r), f"Fattura_{r['id']}.pdf", key=f"f_{r['id']}")
-                cc.download_button("🚨 Vigili", genera_modulo_vigili_legale(r), f"Vigili_{r['id']}.pdf", key=f"v_{r['id']}")
+                ca.download_button("📜 Contratto", genera_contratto_legale(r), f"Contratto_{r['id']}.pdf")
+                cb.download_button("🧾 Fattura", genera_fattura_completa(r), f"Fattura_{r['id']}.pdf")
+                cc.download_button("🚨 Vigili", genera_modulo_vigili_legale(r), f"Vigili_{r['id']}.pdf")
