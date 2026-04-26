@@ -38,7 +38,22 @@ def upload_media(file, targa, tipo):
     if file is None: return None
     try:
         nome_file = f"{tipo}{targa}{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        supabase.storage.from_("documenti").upload(nome_file, file.getvalue(), {"content-type": file.type})
+        content_type = file.type
+        data = file.getvalue()
+        
+        # Comprimi le immagini per risparmiare spazio sul database
+        if "image" in content_type:
+            img = Image.open(file)
+            if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+            img.thumbnail((800, 800))
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=75)
+            data = buf.getvalue()
+            nome_file += ".jpg"
+        else:
+            nome_file += ".mp4" if "mp4" in content_type else ".mov"
+            
+        supabase.storage.from_("documenti").upload(nome_file, data, {"content-type": content_type})
         return supabase.storage.from_("documenti").get_public_url(nome_file)
     except: return None
 
@@ -52,7 +67,7 @@ class PDF(FPDF):
         self.cell(0, 4, f"P.IVA: {PIVA} | C.F.: {CF_DITTA}", ln=True)
         self.ln(5)
 
-# --- 1. MODULO VIGILI (COME DA FOTO) ---
+# --- 1. MODULO VIGILI ---
 def genera_modulo_vigili(c):
     pdf = PDF(); pdf.add_page()
     pdf.set_font("Arial", "", 10)
@@ -87,7 +102,7 @@ def genera_modulo_vigili(c):
     pdf.cell(0, 5, "Marianna Battaglia", ln=True, align="R")
     return bytes(pdf.output(dest="S"))
 
-# --- 2. CONTRATTO (LAYOUT RICHIESTO) ---
+# --- 2. CONTRATTO ---
 def genera_contratto_completo(c):
     pdf = PDF(); pdf.add_page()
     pdf.set_font("Arial", "B", 12); pdf.cell(0, 10, safe(f"CONTRATTO DI NOLEGGIO N. {c['numero_fattura']}"), ln=True, align="C")
@@ -130,7 +145,7 @@ def genera_contratto_completo(c):
         except: pass
     return bytes(pdf.output(dest="S"))
 
-# --- 3. FATTURA CON DETTAGLIO PAGAMENTO ---
+# --- 3. FATTURA ---
 def genera_fattura_completa(c):
     pdf = PDF(); pdf.add_page()
     pdf.set_font("Arial", "B", 14); pdf.cell(0, 10, safe(f"FATTURA N. {c['numero_fattura']}"), ln=True, align="C")
@@ -142,13 +157,56 @@ def genera_fattura_completa(c):
     pdf.set_font("Arial", "B", 10); pdf.cell(110, 8, "DESCRIZIONE", 1); pdf.cell(40, 8, "IVA", 1); pdf.cell(40, 8, "TOTALE", 1, ln=True)
     pdf.set_font("Arial", "", 10); pdf.cell(110, 10, safe(f"Noleggio {c['modello']} tg {c['targa']}"), 1); pdf.cell(40, 10, "22%", 1); pdf.cell(40, 10, f"{p:.2f}", 1, ln=True)
     pdf.ln(5)
-    # INFO PAGAMENTO
     pdf.set_font("Arial", "B", 9)
     pdf.cell(0, 6, safe(f"METODO DI PAGAMENTO: {s(c.get('metodo_pagamento', 'NON SPECIFICATO')).upper()}"), ln=True)
     pdf.cell(0, 6, safe(f"STATO PAGAMENTO: {s(c.get('stato_pagamento', 'DA DEFINIRE')).upper()}"), ln=True)
     pdf.ln(5)
     pdf.set_font("Arial", "B", 11); pdf.cell(150, 8, "TOTALE DA PAGARE:", 0, 0, "R"); pdf.cell(40, 8, f"{p:.2f} EUR", 1, ln=True)
     return bytes(pdf.output(dest="S"))
+
+# --- 4. XML ARUBA ---
+def genera_xml_fattura(c):
+    p_tot = float(c.get('prezzo', 0))
+    imp = round(p_tot / 1.22, 2)
+    iva = round(p_tot - imp, 2)
+    dt = datetime.now().strftime("%Y-%m-%d")
+    prog_invio = f"PROG{int(time.time())}" 
+    sdi = s(c.get('codice_univoco', '0000000'))
+    if str(c.get('nazionalita')).lower() != "italia": sdi = "XXXXXXX"
+
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica versione="FPR12" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2">
+  <FatturaElettronicaHeader>
+    <DatiTrasmissione>
+      <IdTrasmittente><IdPaese>IT</IdPaese><IdCodice>{PIVA}</IdCodice></IdTrasmittente>
+      <ProgressivoInvio>{prog_invio}</ProgressivoInvio>
+      <FormatoTrasmissione>FPR12</FormatoTrasmissione>
+      <CodiceDestinatario>{sdi}</CodiceDestinatario>
+    </DatiTrasmissione>
+    <CedentePrestatore>
+      <DatiAnagrafici>
+        <IdFiscaleIVA><IdPaese>IT</IdPaese><IdCodice>{PIVA}</IdCodice></IdFiscaleIVA>
+        <Anagrafica><Denominazione>{DITTA}</Denominazione></Anagrafica>
+        <RegimeFiscale>RF01</RegimeFiscale>
+      </DatiAnagrafici>
+      <Sede><Indirizzo>{INDIRIZZO}</Indirizzo><CAP>{CAP}</CAP><Comune>{COMUNE}</Comune><Provincia>{PROVINCIA}</Provincia><Nazione>IT</Nazione></Sede>
+    </CedentePrestatore>
+    <CessionarioCommittente>
+      <DatiAnagrafici>
+        <CodiceFiscale>{s(c.get('codice_fiscale', '')).upper()}</CodiceFiscale>
+        <Anagrafica><Nome>{s(c.get('nome', '')).upper()}</Nome><Cognome>{s(c.get('cognome', '')).upper()}</Cognome></Anagrafica>
+      </DatiAnagrafici>
+    </CessionarioCommittente>
+  </FatturaElettronicaHeader>
+  <FatturaElettronicaBody>
+    <DatiGenerali><DatiGeneraliDocumento><TipoDocumento>TD01</TipoDocumento><Divisa>EUR</Divisa><Data>{dt}</Data><Numero>{c.get('numero_fattura', '0')}</Numero><ImportoTotaleDocumento>{p_tot:.2f}</ImportoTotaleDocumento></DatiGeneraliDocumento></DatiGenerali>
+    <DatiBeniServizi>
+      <DettaglioLinee><NumeroLinea>1</NumeroLinea><Descrizione>Noleggio {s(c.get('modello'))} tg {s(c.get('targa'))}</Descrizione><PrezzoUnitario>{imp:.2f}</PrezzoUnitario><PrezzoTotale>{imp:.2f}</PrezzoTotale><AliquotaIVA>22.00</AliquotaIVA></DettaglioLinee>
+      <DatiRiepilogo><AliquotaIVA>22.00</AliquotaIVA><ImponibileImporto>{imp:.2f}</ImponibileImporto><Imposta>{iva:.2f}</Imposta><EsigibilitaIVA>I</EsigibilitaIVA></DatiRiepilogo>
+    </DatiBeniServizi>
+    <DatiPagamento><CondizioniPagamento>TP02</CondizioniPagamento><DettaglioPagamento><ModalitaPagamento>MP01</ModalitaPagamento><ImportoPagamento>{p_tot:.2f}</ImportoPagamento></DettaglioPagamento></DatiPagamento>
+  </FatturaElettronicaBody>
+</p:FatturaElettronica>""".encode('utf-8')
 
 # --- INTERFACCIA ---
 st.set_page_config(page_title="Battaglia Rent Management", layout="wide")
@@ -169,8 +227,8 @@ with t1:
         c4, c5, c6 = st.columns(3)
         cf, pat_n, tel = c4.text_input("Codice Fiscale"), c5.text_input("N. Patente"), c6.text_input("Telefono")
         c7, c8, c9 = st.columns(3)
-        l_nas, d_nas, em = c7.text_input("Luogo Nascita"), c8.text_input("Data Nascita"), c9.text_input("Email/PEC")
-        ind = st.text_input("Indirizzo Residenza")
+        l_nas, d_nas, em = c7.text_input("Luogo Nascita"), c8.text_input("Data Nascita (gg/mm/aaaa)"), c9.text_input("Email/PEC")
+        ind = st.text_input("Indirizzo Residenza Completo")
         
         st.subheader("Dati Noleggio e Pagamento")
         n1, n2, n3 = st.columns(3)
@@ -183,29 +241,43 @@ with t1:
         
         d1, d2, d3 = st.columns(3)
         ini, fin = d1.date_input("Inizio"), d2.date_input("Fine")
-        rif_multa = d3.text_input("Rif. Verbale (Solo per Modulo Vigili)", help="Inserisci il numero del verbale se stai registrando una multa")
+        rif_multa = d3.text_input("Rif. Verbale (Solo per Modulo Vigili)")
+
+        st.subheader("📸 Documenti e Stato Mezzo")
+        v_m = st.file_uploader("Video/Foto Danni", type=["mp4","mov","jpg","png"])
+        f_p = st.file_uploader("Patente Fronte", type=["jpg","png"])
+        r_p = st.file_uploader("Patente Retro", type=["jpg","png"])
 
         canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig", update_streamlit=True)
         accetto = st.checkbox("Il cliente accetta le clausole e il GDPR.")
         
         if st.form_submit_button("SALVA E GENERA"):
-            if not (nome and tar and accetto): st.error("Dati obbligatori mancanti!")
+            if not (nome and tar and accetto): st.error("Dati obbligatori mancanti! Compila Nome, Targa e spunta l'accettazione.")
             else:
                 num = get_prossimo_numero()
-                img = Image.fromarray(canvas.image_data.astype("uint8"))
-                buf = io.BytesIO(); img.save(buf, format="PNG")
-                f_b64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
                 
-                dati = {
-                    "nome":nome, "cognome":cognome, "codice_fiscale":cf, "modello":mod, "targa":tar, 
-                    "prezzo":prezzo, "numero_fattura":num, "firma":f_b64, "codice_univoco":sdi, 
-                    "nazionalita":naz, "inizio":str(ini), "fine":str(fin), "numero_patente":pat_n, 
-                    "telefono":tel, "luogo_nascita":l_nas, "data_nascita":d_nas, "pec":em, 
-                    "indirizzo_cliente":ind, "metodo_pagamento":metodo, "stato_pagamento":stato,
-                    "riferimento_multa": rif_multa
-                }
-                supabase.table("contratti").insert(dati).execute()
-                st.success(f"Noleggio N. {num} salvato con successo!")
+                check = supabase.table("contratti").select("id").eq("numero_fattura", num).execute()
+                if len(check.data) > 0:
+                    st.error("Errore: Numero fattura già esistente nel database. Riprova.")
+                else:
+                    u_v = upload_media(v_m, tar, "ST")
+                    u_f = upload_media(f_p, tar, "F")
+                    u_r = upload_media(r_p, tar, "R")
+                    
+                    img = Image.fromarray(canvas.image_data.astype("uint8"))
+                    buf = io.BytesIO(); img.save(buf, format="PNG")
+                    f_b64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+                    
+                    dati = {
+                        "nome":nome, "cognome":cognome, "codice_fiscale":cf, "modello":mod, "targa":tar, 
+                        "prezzo":prezzo, "numero_fattura":num, "firma":f_b64, "codice_univoco":sdi, 
+                        "nazionalita":naz, "inizio":str(ini), "fine":str(fin), "numero_patente":pat_n, 
+                        "telefono":tel, "luogo_nascita":l_nas, "data_nascita":d_nas, "pec":em, 
+                        "indirizzo_cliente":ind, "metodo_pagamento":metodo, "stato_pagamento":stato,
+                        "riferimento_multa": rif_multa, "url_video":u_v, "url_fronte":u_f, "url_retro":u_r
+                    }
+                    supabase.table("contratti").insert(dati).execute()
+                    st.success(f"Noleggio N. {num} salvato con successo!")
 
 with t2:
     search = st.text_input("🔍 Cerca per Cognome o Targa")
@@ -213,8 +285,22 @@ with t2:
     for idx, r in enumerate(res.data):
         if search.lower() in f"{s(r['cognome'])} {s(r['targa'])}".lower():
             with st.expander(f"📄 N. {r['numero_fattura']} - {r['cognome']} ({r['targa']})"):
-                st.write(f"*Pagamento:* {r.get('metodo_pagamento')} - {r.get('stato_pagamento')}")
-                b1, b2, b3 = st.columns(3)
+                st.write(f"*Tel:* {r.get('telefono')} | *Patente:* {r.get('numero_patente')} | *Pagamento:* {r.get('metodo_pagamento')} ({r.get('stato_pagamento')})")
+                st.write(f"*Periodo:* {r['inizio']} / {r['fine']}")
+                
+                c_m1, c_m2, c_m3 = st.columns(3)
+                with c_m1:
+                    if r.get('url_video'):
+                        if ".mp4" in r['url_video'] or ".mov" in r['url_video']: st.video(r['url_video'])
+                        else: st.image(r['url_video'], caption="Danni / Stato Mezzo")
+                with c_m2:
+                    if r.get('url_fronte'): st.image(r['url_fronte'], caption="Patente Fronte")
+                with c_m3:
+                    if r.get('url_retro'): st.image(r['url_retro'], caption="Patente Retro")
+                
+                st.markdown("---")
+                b1, b2, b3, b4 = st.columns(4)
                 b1.download_button("📜 Contratto", genera_contratto_completo(r), f"Contratto_{idx}.pdf", key=f"c_{idx}")
                 b2.download_button("🧾 Fattura", genera_fattura_completa(r), f"Fattura_{idx}.pdf", key=f"f_{idx}")
                 b3.download_button("🚨 Modulo Vigili", genera_modulo_vigili(r), f"Vigili_{idx}.pdf", key=f"v_{idx}")
+                b4.download_button("📂 XML Aruba", genera_xml_fattura(r), f"IT{PIVA}{idx}.xml", key=f"x{idx}")
