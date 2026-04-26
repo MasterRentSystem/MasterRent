@@ -48,7 +48,6 @@ def upload_media(file, targa, tipo):
             data = buf.getvalue()
             nome_file += ".jpg"
         else:
-            data = file.getvalue()
             nome_file += ".mp4" if "mp4" in content_type else ".mov"
         supabase.storage.from_("documenti").upload(nome_file, data, {"content-type": content_type})
         return supabase.storage.from_("documenti").get_public_url(nome_file)
@@ -169,8 +168,10 @@ st.set_page_config(page_title="Battaglia Rent Pro", layout="wide")
 
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
-    if st.text_input("Password", type="password") == "1234":
-        if st.button("Accedi"): st.session_state.auth = True; st.rerun()
+    pwd = st.text_input("Password", type="password")
+    if st.button("Accedi"):
+        if pwd == "1234": st.session_state.auth = True; st.rerun()
+        else: st.error("Password errata")
     st.stop()
 
 t1, t2 = st.tabs(["📝 Nuovo Noleggio", "📂 Archivio"])
@@ -186,12 +187,10 @@ with t1:
         d1, d2, d3 = st.columns(3)
         prezzo, deposito, sdi = d1.number_input("Prezzo (€)"), d2.number_input("Deposito (€)"), d3.text_input("SDI", value="0000000")
         ini, fin = st.date_input("Inizio"), st.date_input("Fine")
-        
         st.subheader("📸 Foto/Video")
         v_m = st.file_uploader("Danni Veicolo", type=["mp4", "mov", "jpg", "png"])
         f_p = st.file_uploader("Fronte Patente")
         r_p = st.file_uploader("Retro Patente")
-        
         canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_main")
         accetto = st.checkbox("Accetto le condizioni.")
         
@@ -212,9 +211,12 @@ with t1:
 with t2:
     search = st.text_input("🔍 Cerca Cognome o Targa")
     res = supabase.table("contratti").select("*").order("numero_fattura", desc=True).execute()
-    for r in res.data:
+    
+    # AGGIUNTO idx PER EVITARE DUPLICATE KEY ERROR
+    for idx, r in enumerate(res.data):
         if search.lower() in f"{s(r['cognome'])} {s(r['targa'])}".lower():
             n_f = r['numero_fattura']
+            # Usiamo idx come parte della chiave per essere sicuri al 100% che sia unica
             with st.expander(f"📄 N. {n_f} - {r['cognome']} ({r['targa']})"):
                 st.write(f"*Periodo:* {r['inizio']} / {r['fine']}")
                 cm1, cm2, cm3 = st.columns(3)
@@ -229,8 +231,9 @@ with t2:
 
                 st.markdown("---")
                 dcol1, dcol2, dcol3, dcol4 = st.columns(4)
-                # NOTA: Qui aggiungo 'key' per evitare l'errore DuplicateElementId
-                dcol1.download_button("📜 Contratto", genera_contratto_legale(r), f"Contratto_{n_f}.pdf", key=f"cnt_{n_f}")
-                dcol2.download_button("🧾 Fattura PDF", genera_fattura_completa(r), f"Fattura_{n_f}.pdf", key=f"fat_{n_f}")
-                dcol3.download_button("🚨 Vigili", genera_modulo_vigili_legale(r), f"Vigili_{n_f}.pdf", key=f"vig_{n_f}")
-                dcol4.download_button("📂 XML ARUBA", genera_xml_fattura(r), f"IT{PIVA}DF{n_f}.xml", mime="text/xml", key=f"xml_{n_f}")
+                
+                # CHIAVI UNICHE AL 100% (n_f + idx)
+                dcol1.download_button("📜 Contratto", genera_contratto_legale(r), f"Contratto_{n_f}.pdf", key=f"cnt_{n_f}_{idx}")
+                dcol2.download_button("🧾 Fattura PDF", genera_fattura_completa(r), f"Fattura_{n_f}.pdf", key=f"fat_{n_f}_{idx}")
+                dcol3.download_button("🚨 Vigili", genera_modulo_vigili_legale(r), f"Vigili_{n_f}.pdf", key=f"vig_{n_f}_{idx}")
+                dcol4.download_button("📂 XML ARUBA", genera_xml_fattura(r), f"IT{PIVA}DF{n_f}.xml", mime="text/xml", key=f"xml_{n_f}_{idx}")
