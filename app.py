@@ -14,7 +14,6 @@ INDIRIZZO = "Via Cognole n. 5"
 CAP = "80075"
 COMUNE = "Forio"
 PROVINCIA = "NA"
-NAZIONE = "IT"
 PIVA = "10252601215"
 CF_DITTA = "BTTMNN87A53Z112S"
 
@@ -38,36 +37,35 @@ def upload_media(file, targa, tipo):
     try:
         nome_file = f"{tipo}{targa}{datetime.now().strftime('%Y%m%d%H%M%S')}"
         content_type = file.type
+        data = file.getvalue()
         if "image" in content_type:
-            img = Image.open(file)
-            if img.mode in ("RGBA", "P"): img = img.convert("RGB")
-            img.thumbnail((800, 800))
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=75)
-            data = buf.getvalue()
             nome_file += ".jpg"
         else:
-            data = file.getvalue()
             nome_file += ".mp4" if "mp4" in content_type else ".mov"
         supabase.storage.from_("documenti").upload(nome_file, data, {"content-type": content_type})
         return supabase.storage.from_("documenti").get_public_url(nome_file)
     except: return None
 
-# --- LOGICA GENERAZIONE XML ARUBA/AdE ---
+# --- FUNZIONE GENERAZIONE XML (PER ARUBA/ADE) ---
 def genera_xml_fattura(c):
     prezzo_totale = float(c['prezzo'])
     imponibile = round(prezzo_totale / 1.22, 2)
     imposta = round(prezzo_totale - imponibile, 2)
     data_doc = datetime.now().strftime("%Y-%m-%d")
     
-    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+    # Se il cliente è straniero (nazionalità non Italia), lo SDI diventa XXXXXXX
+    codice_sdi = s(c.get('codice_univoco', '0000000'))
+    if c.get('nazionalita', '').lower() not in ['italia', 'it', 'italiana']:
+        codice_sdi = "XXXXXXX"
+
+    xml_data = f"""<?xml version="1.0" encoding="UTF-8"?>
 <p:FatturaElettronica versione="FPR12" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2">
   <FatturaElettronicaHeader>
     <DatiTrasmissione>
       <IdTrasmittente><IdPaese>IT</IdPaese><IdCodice>{PIVA}</IdCodice></IdTrasmittente>
       <ProgressivoInvio>{c['numero_fattura']}</ProgressivoInvio>
       <FormatoTrasmissione>FPR12</FormatoTrasmissione>
-      <CodiceDestinatario>{s(c.get('codice_univoco', '0000000'))}</CodiceDestinatario>
+      <CodiceDestinatario>{codice_sdi}</CodiceDestinatario>
     </DatiTrasmissione>
     <CedentePrestatore>
       <DatiAnagrafici>
@@ -92,136 +90,80 @@ def genera_xml_fattura(c):
     </DatiGenerali>
     <DatiBeniServizi>
       <DettaglioLinee>
-        <NumeroLinea>1</NumeroLinea><Descrizione>Noleggio {s(c['modello'])} targa {s(c['targa'])}</Descrizione>
-        <PrezzoUnitario>{imponibile:.2f}</PrezzoUnitario><PrezzoTotale>{imponibile:.2f}</PrezzoTotale><AliquotaIVA>22.00</AliquotaIVA>
+        <NumeroLinea>1</NumeroLinea><Descrizione>Noleggio veicolo {s(c['modello'])} targa {s(c['targa'])}</Descrizione><PrezzoUnitario>{imponibile:.2f}</PrezzoUnitario><PrezzoTotale>{imponibile:.2f}</PrezzoTotale><AliquotaIVA>22.00</AliquotaIVA>
       </DettaglioLinee>
-      <DatiRiepilogo><AliquotaIVA>22.00</AliquotaIVA><ImponibileImporto>{imponibile:.2f}</ImponibileImporto><Imposta>{imposta:.2f}</Imposta></DatiRiepilogo>
+      <DatiRiepilogo>
+        <AliquotaIVA>22.00</AliquotaIVA><ImponibileImporto>{imponibile:.2f}</ImponibileImporto><Imposta>{imposta:.2f}</Imposta><EsigibilitaIVA>I</EsigibilitaIVA>
+      </DatiRiepilogo>
     </DatiBeniServizi>
   </FatturaElettronicaBody>
 </p:FatturaElettronica>"""
-    return xml.encode('utf-8')
+    return xml_data.encode('utf-8')
 
-# --- GENERAZIONE PDF (VERSIONE ORIGINALE COMPLETA) ---
-class BusinessPDF(FPDF):
-    def header(self):
-        self.set_font("Arial", "B", 12)
-        self.cell(0, 6, safe(DITTA), ln=True)
-        self.set_font("Arial", "", 8)
-        self.cell(0, 4, safe(f"{TITOLARE} - {INDIRIZZO}, {COMUNE}"), ln=True)
-        self.cell(0, 4, safe(f"P.IVA: {PIVA} | C.F.: {CF_DITTA}"), ln=True)
-        self.ln(5); self.line(10, self.get_y(), 200, self.get_y()); self.ln(5)
-
-def genera_contratto_legale(c):
-    pdf = BusinessPDF(); pdf.add_page()
-    pdf.set_font("Arial", "B", 14); pdf.cell(0, 10, safe(f"CONTRATTO DI NOLEGGIO N. {c['numero_fattura']}"), ln=True, align="C")
-    
-    pdf.ln(5); pdf.set_font("Arial", "B", 10); pdf.cell(0, 7, " ANAGRAFICA CLIENTE", ln=True, fill=True, border=1)
-    pdf.set_font("Arial", "", 9)
-    pdf.cell(95, 7, safe(f"Nome: {c['nome']} {c['cognome']}"), border="LR")
-    pdf.cell(95, 7, safe(f"Nazionalita: {c.get('nazionalita','')}"), border="R", ln=True)
-    pdf.cell(95, 7, safe(f"Nato il: {c.get('data_nascita','')} a: {c.get('luogo_nascita','')}"), border="LR")
-    pdf.cell(95, 7, safe(f"C.F.: {c['codice_fiscale']}"), border="R", ln=True)
-    pdf.cell(190, 7, safe(f"Residenza: {c.get('indirizzo_cliente','')}"), border="LR", ln=True)
-    pdf.cell(95, 7, safe(f"Tel: {c.get('telefono','')}"), border="LRB")
-    pdf.cell(95, 7, safe(f"Email/PEC: {c.get('pec','')}"), border="RB", ln=True)
-    
-    pdf.ln(3); pdf.set_font("Arial", "B", 10); pdf.cell(0, 7, " DATI NOLEGGIO", ln=True, fill=True, border=1)
-    pdf.set_font("Arial", "", 9)
-    pdf.cell(63, 7, safe(f"Mezzo: {c['modello']}"), border=1)
-    pdf.cell(63, 7, safe(f"Targa: {c['targa']}"), border=1)
-    pdf.cell(64, 7, safe(f"Patente: {c['numero_patente']}"), border=1, ln=True)
-    pdf.cell(95, 7, safe(f"Inizio: {c['inizio']}  Fine: {c['fine']}"), border=1)
-    pdf.cell(95, 7, safe(f"Prezzo: {c['prezzo']} EUR"), border=1, ln=True)
-
-    pdf.ln(5); pdf.set_font("Arial", "B", 10); pdf.cell(0, 7, " CONDIZIONI ESSENZIALI DI NOLEGGIO", ln=True, fill=True, border=1)
-    pdf.set_font("Arial", "", 8)
-    clausole = ("1. ASSICURAZIONE: R.C.A. solo verso terzi. 2. DANNI/FURTO: A carico del cliente. "
-                "3. CASCO: Obbligatorio. 4. MULTE: A carico del cliente. 5. PRIVACY: Autorizzo GDPR.")
-    pdf.multi_cell(0, 4, safe(clausole), border=1)
-
-    pdf.ln(5); pdf.set_font("Arial", "B", 9); pdf.cell(0, 7, "FIRMA DEL CLIENTE", ln=True)
-    y_f = pdf.get_y(); pdf.cell(100, 25, "", border=1)
-    pdf.cell(90, 25, safe(f"Data: {datetime.now().strftime('%d/%m/%Y')}"), border=1, ln=True)
-    firma = c.get("firma")
-    if firma and len(str(firma)) > 100:
-        try:
-            if "," in str(firma): firma = str(firma).split(",")[1]
-            pdf.image(io.BytesIO(base64.b64decode(firma)), x=15, y=y_f+2, w=40)
-        except: pass
-    return bytes(pdf.output(dest="S"))
-
+# --- PDF FATTURA DI CORTESIA ---
 def genera_fattura_pdf(c):
-    pdf = BusinessPDF(); pdf.add_page()
-    pdf.set_font("Arial", "B", 14); pdf.cell(0, 10, safe(f"FATTURA N. {c['numero_fattura']}"), ln=True, align="C", border="B")
-    pdf.ln(10); pdf.set_font("Arial", "B", 9); pdf.cell(95, 7, "CEDENTE", border=1, fill=True); pdf.cell(95, 7, "CESSIONARIO", border=1, fill=True, ln=True)
-    pdf.set_font("Arial", "", 9); pdf.multi_cell(95, 5, safe(f"{DITTA}\n{TITOLARE}\n{INDIRIZZO}\n{COMUNE}\nP.IVA {PIVA}"), border=1)
-    pdf.set_xy(105, pdf.get_y()-20); pdf.multi_cell(95, 5, safe(f"{c['nome']} {c['cognome']}\nCF: {c['codice_fiscale']}\nSDI: {c.get('codice_univoco','0000000')}"), border=1)
-    pdf.ln(15); p = float(c['prezzo']); imp = p/1.22; iva = p-imp
-    pdf.set_font("Arial", "B", 10); pdf.cell(110, 8, "DESCRIZIONE", border=1); pdf.cell(40, 8, "IVA", border=1); pdf.cell(40, 8, "TOTALE", border=1, ln=True)
-    pdf.set_font("Arial", "", 10); pdf.cell(110, 10, safe(f"Noleggio {c['modello']} ({c['targa']})"), border=1); pdf.cell(40, 10, "22%", border=1); pdf.cell(40, 10, f"{p:.2f} EUR", border=1, ln=True)
-    pdf.ln(5); pdf.cell(150, 7, "TOTALE FATTURA:", align="R"); pdf.cell(40, 7, f"{p:.2f} EUR", border=1, ln=True)
-    return bytes(pdf.output(dest="S"))
-
-def genera_modulo_vigili_legale(c):
-    pdf = BusinessPDF(); pdf.add_page()
-    pdf.set_font("Arial", "B", 10); pdf.cell(0, 7, safe("OGGETTO: COMUNICAZIONE DATI CONDUCENTE PER RINOTIFICA"), ln=True)
+    pdf = FPDF(); pdf.add_page()
+    pdf.set_font("Arial", "B", 12); pdf.cell(0, 10, safe(DITTA), ln=True)
+    pdf.set_font("Arial", "", 14); pdf.cell(0, 10, safe(f"FATTURA N. {c['numero_fattura']}"), ln=True, align="C")
+    pdf.ln(10); p = float(c['prezzo']); imp = p/1.22; iva = p-imp
     pdf.set_font("Arial", "", 10)
-    testo = (f"La sottoscritta BATTAGLIA MARIANNA dichiara che il veicolo {c['modello']} targa {c['targa']} "
-             f"era locato a {c['nome']} {c['cognome']}, nato a {c.get('luogo_nascita','')} il {c.get('data_nascita','')}, "
-             f"residente in {c.get('indirizzo_cliente','')}. Patente n. {c['numero_patente']}.")
-    pdf.multi_cell(0, 6, safe(testo)); return bytes(pdf.output(dest="S"))
+    pdf.cell(110, 10, safe(f"Noleggio {c['modello']} {c['targa']}"), border=1)
+    pdf.cell(40, 10, "IVA 22%", border=1); pdf.cell(40, 10, f"{p:.2f} EUR", border=1, ln=True)
+    return bytes(pdf.output(dest="S"))
 
 # --- INTERFACCIA STREAMLIT ---
-st.set_page_config(page_title="Battaglia Rent Pro", layout="wide")
-if "auth" not in st.session_state: st.session_state.auth = False
-if not st.session_state.auth:
-    if st.text_input("Password", type="password") == "1234":
-        if st.button("Accedi"): st.session_state.auth = True; st.rerun()
-    st.stop()
+st.set_page_config(page_title="Battaglia Rent", layout="wide")
 
 t1, t2 = st.tabs(["📝 Nuovo Noleggio", "📂 Archivio"])
 
 with t1:
-    with st.form("form_master", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        nome, cognome, naz = c1.text_input("Nome"), c2.text_input("Cognome"), c3.text_input("Nazionalità")
-        c4, c5, c6 = st.columns(3)
-        cf, tel, pec = c4.text_input("C.F. / ID"), c5.text_input("Telefono"), c6.text_input("Email / PEC")
-        c7, c8, c9 = st.columns(3)
-        dat_n, luo_n, ind = c7.text_input("Data Nascita"), c8.text_input("Luogo Nascita"), c9.text_input("Residenza")
-        m1, m2, m3 = st.columns(3)
-        mod, tar, pat = m1.text_input("Modello"), m2.text_input("Targa").upper(), m3.text_input("N. Patente")
-        d1, d2, d3 = st.columns(3)
-        prezzo, deposito, sdi = d1.number_input("Prezzo"), d2.number_input("Deposito"), d3.text_input("SDI", value="0000000")
-        ini, fin = st.date_input("Inizio"), st.date_input("Fine")
+    with st.form("form_noleggio"):
+        col1, col2 = st.columns(2)
+        nome = col1.text_input("Nome")
+        cognome = col2.text_input("Cognome")
+        nazionalita = st.selectbox("Nazionalità", ["Italia", "Estero"])
+        cf = st.text_input("Codice Fiscale")
+        modello = st.text_input("Modello Motorino")
+        targa = st.text_input("Targa").upper()
+        prezzo = st.number_input("Prezzo Totale", min_value=0.0)
+        sdi = st.text_input("Codice SDI (se italiano)", value="0000000")
         
-        st.subheader("📹 Stato Veicolo & Documenti")
-        video_mezzo = st.file_uploader("Video/Foto Stato Motorino", type=["mp4", "mov", "jpg", "png"])
-        f1, f2 = st.file_uploader("Fronte Patente"), st.file_uploader("Retro Patente")
+        video = st.file_uploader("Video/Foto Stato Mezzo", type=["mp4", "mov", "jpg", "png"])
         
-        canvas = st_canvas(height=150, width=400, stroke_width=3, key="sig_master")
-        accetto = st.checkbox("Accetto le condizioni di noleggio e privacy.")
-        
-        if st.form_submit_button("💾 REGISTRA NOLEGGIO"):
-            if not accetto or not nome or not tar: st.error("❌ Compila i campi obbligatori!")
-            else:
-                try:
-                    img = Image.fromarray(canvas.image_data.astype("uint8"))
-                    buf = io.BytesIO(); img.save(buf, format="PNG")
-                    firma = base64.b64encode(buf.getvalue()).decode()
-                    u_v = upload_media(video_mezzo, tar, "VIDEO")
-                    u_f = upload_media(f1, tar, "F")
-                    u_r = upload_media(f2, tar, "R")
-                    num = get_prossimo_numero()
-                    dati = {"nome": nome, "cognome": cognome, "codice_fiscale": cf, "modello": mod, "targa": tar, "prezzo": prezzo, "deposito": deposito, "numero_fattura": num, "firma": firma, "url_video": u_v, "url_fronte": u_f, "url_retro": u_r, "pec": pec, "codice_univoco": sdi, "data_nascita": dat_n, "luogo_nascita": luo_n, "indirizzo_cliente": ind, "inizio": str(ini), "fine": str(fin), "numero_patente": pat, "nazionalita": naz, "telefono": tel}
-                    supabase.table("contratti").insert(dati).execute()
-                    st.success(f"✅ Noleggio N. {num} salvato!")
-                except Exception as e: st.error(f"Errore: {e}")
+        if st.form_submit_button("REGISTRA"):
+            num = get_prossimo_numero()
+            u_v = upload_media(video, targa, "VIDEO")
+            dati = {
+                "nome": nome, "cognome": cognome, "codice_fiscale": cf, "modello": modello, 
+                "targa": targa, "prezzo": prezzo, "numero_fattura": num, "url_video": u_v,
+                "codice_univoco": sdi, "nazionalita": nazionalita
+            }
+            supabase.table("contratti").insert(dati).execute()
+            st.success(f"Registrato! Fattura N. {num}")
 
 with t2:
-    search = st.text_input("🔍 Cerca Cognome o Targa")
+    st.subheader("Archivio Contratti")
     res = supabase.table("contratti").select("*").order("numero_fattura", desc=True).execute()
     for r in res.data:
-        if search.lower() in f"{s(r['cognome'])} {s(r['targa'])}".lower():
-            with st.expander(f"N. {r['numero_fattura']} - {r['cognome']} ({r['targa']})"):
-                st.write("### 🛵 Stato del Ve
+        with st.expander(f"Fattura {r['numero_fattura']} - {r['cognome']} ({r['targa']})"):
+            # MOSTRA VIDEO
+            if r.get('url_video'):
+                st.video(r['url_video'])
+            
+            # TASTI DOWNLOAD
+            col_a, col_b = st.columns(2)
+            
+            # 1. PDF PER IL CLIENTE
+            col_a.download_button(
+                "📜 Scarica PDF Cliente", 
+                genera_fattura_pdf(r), 
+                f"Fattura_{r['numero_fattura']}.pdf"
+            )
+            
+            # 2. XML PER ARUBA (IL POSTINO DIGITALE)
+            col_b.download_button(
+                "📂 SCARICA XML ARUBA", 
+                genera_xml_fattura(r), 
+                f"IT{PIVA}DF{r['numero_fattura']}.xml",
+                mime="text/xml"
+            )
