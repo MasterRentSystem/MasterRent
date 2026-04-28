@@ -9,19 +9,19 @@ import random
 from datetime import datetime
 import urllib.parse
 
-# --- CONFIGURAZIONE AZIENDALE ---
+# --- DATI AZIENDALI FISSI ---
 DITTA = "BATTAGLIA RENT"
 TITOLARE = "BATTAGLIA MARIANNA"
 PIVA = "10252601215"
 CF_DITTA = "BTTMNN87A53Z112S"
-INFO_AZIENDA = "Via Cognole n. 5 - 80075 Forio (NA)"
+SEDE = "Via Cognole n. 5 - 80075 Forio (NA)"
 
 # Connessione Supabase
 URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- FUNZIONI UTILI ---
+# --- UTILS ---
 def s(v): return "" if v is None else str(v)
 def safe(t): return s(t).encode("latin-1", "replace").decode("latin-1")
 
@@ -32,153 +32,205 @@ def get_prossimo_numero():
         return max(nums) + 1 if nums else 1
     except: return 1
 
-def image_to_base64(uploaded_file):
-    if uploaded_file is not None:
-        return "data:image/png;base64," + base64.b64encode(uploaded_file.getvalue()).decode()
-    return None
-
-# --- MOTORE FATTURA XML ---
-def genera_xml_fattura(c):
-    p_tot = float(c.get('prezzo', 0))
-    imp = round(p_tot / 1.22, 2)
-    iva = round(p_tot - imp, 2)
-    dt = datetime.now().strftime("%Y-%m-%d")
-    sdi = s(c.get('codice_univoco', '0000000'))
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<p:FatturaElettronica versione="FPR12" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2">
-  <FatturaElettronicaHeader>
-    <DatiTrasmissione>
-      <IdTrasmittente><IdPaese>IT</IdPaese><IdCodice>{PIVA}</IdCodice></IdTrasmittente>
-      <ProgressivoInvio>{int(datetime.now().timestamp())}</ProgressivoInvio>
-      <FormatoTrasmissione>FPR12</FormatoTrasmissione>
-      <CodiceDestinatario>{sdi}</CodiceDestinatario>
-    </DatiTrasmissione>
-    <CedentePrestatore>
-      <DatiAnagrafici><IdFiscaleIVA><IdPaese>IT</IdPaese><IdCodice>{PIVA}</IdCodice></IdFiscaleIVA><Anagrafica><Denominazione>{DITTA}</Denominazione></Anagrafica><RegimeFiscale>RF01</RegimeFiscale></DatiAnagrafici>
-    </CedentePrestatore>
-    <CessionarioCommittente>
-      <DatiAnagrafici><CodiceFiscale>{s(c.get('codice_fiscale', '')).upper()}</CodiceFiscale><Anagrafica><Nome>{s(c.get('nome', '')).upper()}</Nome><Cognome>{s(c.get('cognome', '')).upper()}</Cognome></Anagrafica></DatiAnagrafici>
-    </CessionarioCommittente>
-  </FatturaElettronicaHeader>
-  <FatturaElettronicaBody>
-    <DatiGenerali><DatiGeneraliDocumento><TipoDocumento>TD01</TipoDocumento><Divisa>EUR</Divisa><Data>{dt}</Data><Numero>{c.get('numero_fattura', '0')}</Numero><ImportoTotaleDocumento>{p_tot:.2f}</ImportoTotaleDocumento></DatiGeneraliDocumento></DatiGenerali>
-    <DatiBeniServizi>
-      <DettaglioLinee><NumeroLinea>1</NumeroLinea><Descrizione>Noleggio {s(c.get('modello'))} tg {s(c.get('targa'))}</Descrizione><PrezzoUnitario>{imp:.2f}</PrezzoUnitario><PrezzoTotale>{imp:.2f}</PrezzoTotale><AliquotaIVA>22.00</AliquotaIVA></DettaglioLinee>
-      <DatiRiepilogo><AliquotaIVA>22.00</AliquotaIVA><ImponibileImporto>{imp:.2f}</ImponibileImporto><Imposta>{iva:.2f}</Imposta></DatiRiepilogo>
-    </DatiBeniServizi>
-  </FatturaElettronicaBody>
-</p:FatturaElettronica>""".encode('utf-8')
-
-# --- MOTORE PDF ---
-class PDF(FPDF):
+# --- GENERAZIONE PDF CONTRATTO + 14 CLAUSOLE ---
+class PDF_Contratto(FPDF):
     def header(self):
-        self.set_font("Arial", "B", 10)
-        self.cell(0, 5, DITTA, ln=True, align="L")
+        self.set_font("Arial", "B", 11)
+        self.cell(0, 5, DITTA, ln=True)
         self.set_font("Arial", "", 8)
-        self.cell(0, 4, f"{INFO_AZIENDA} | P.IVA: {PIVA}", ln=True)
-        self.ln(5)
+        self.cell(0, 4, f"Sede Legale: {SEDE} | P.IVA: {PIVA}", ln=True)
+        self.ln(10)
 
-def genera_contratto_completo(c):
-    pdf = PDF(); pdf.add_page()
-    pdf.set_font("Arial", "B", 12); pdf.cell(0, 10, safe(f"CONTRATTO DI NOLEGGIO N. {c['numero_fattura']}"), ln=True, align="C")
+def genera_contratto(c):
+    pdf = PDF_Contratto(); pdf.add_page()
+    pdf.set_font("Arial", "B", 14); pdf.cell(0, 10, safe(f"CONTRATTO DI NOLEGGIO N. {c['numero_fattura']}"), ln=True, align="C")
     
-    # Dati
-    pdf.set_font("Arial", "B", 9); pdf.cell(0, 7, " DATI CLIENTE E VEICOLO", 1, ln=True, fill=True)
+    # BOX DATI CLIENTE
+    pdf.set_fill_color(230, 230, 230)
+    pdf.set_font("Arial", "B", 10); pdf.cell(0, 8, " 1. DATI DEL LOCATARIO (CLIENTE)", 1, ln=True, fill=True)
     pdf.set_font("Arial", "", 9)
-    testo = (f"Cliente: {c['nome']} {c['cognome']} ({c['codice_fiscale']})\n"
-             f"Indirizzo: {c.get('indirizzo_cliente', 'N/D')}\n"
-             f"Patente: {c.get('numero_patente', 'N/D')}\n"
-             f"Mezzo: {c['modello']} tg: {c['targa']}\n"
-             f"Prezzo: {c['prezzo']} EUR | Periodo: {c.get('inizio')} - {c.get('fine')}")
-    pdf.multi_cell(0, 6, safe(testo), border=1)
-    
-    # Firme
-    pdf.ln(5); y_f = pdf.get_y()
-    pdf.set_font("Arial", "B", 7)
-    pdf.cell(95, 30, "Firma 1: Accettazione", border=1, align="L")
-    pdf.cell(95, 30, "Firma 2: Art. 1341-1342 cc", border=1, align="L")
+    dati_cliente = (f"Nome e Cognome: {c['nome']} {c['cognome']}\n"
+                    f"Nato a: {c.get('luogo_nascita', 'N/D')} il {c.get('data_nascita', 'N/D')}\n"
+                    f"Residente in: {c.get('indirizzo_cliente', 'N/D')}\n"
+                    f"Codice Fiscale: {c.get('codice_fiscale', 'N/D')} | Patente: {c.get('numero_patente', 'N/D')}")
+    pdf.multi_cell(0, 6, safe(dati_cliente), border=1)
+
+    # BOX DATI VEICOLO E NOLEGGIO
+    pdf.ln(2)
+    pdf.set_font("Arial", "B", 10); pdf.cell(0, 8, " 2. OGGETTO DEL NOLEGGIO E DURATA", 1, ln=True, fill=True)
+    pdf.set_font("Arial", "", 9)
+    dati_veicolo = (f"Veicolo: {c['modello']} | Targa: {c['targa']}\n"
+                    f"Inizio: {c.get('data_inizio')} ore {c.get('ora_inizio')} | Fine: {c.get('data_fine')}\n"
+                    f"Prezzo Pattuito: EUR {c['prezzo']}")
+    pdf.multi_cell(0, 6, safe(dati_veicolo), border=1)
+
+    # CERTIFICAZIONE OTP
+    pdf.ln(2); pdf.set_font("Arial", "I", 7)
+    pdf.multi_cell(0, 4, safe(f"Documento sottoscritto elettronicamente tramite validazione OTP inviata al numero {c.get('pec')} in data {c.get('timestamp_firma')}. Codice Univoco: {c.get('otp_code')}"))
+
+    # FIRME
+    pdf.ln(5); y_firma = pdf.get_y()
+    pdf.set_font("Arial", "B", 8)
+    pdf.cell(95, 35, "Firma Locatario (Accettazione)", border=1, align="L")
+    pdf.cell(95, 35, "Firma Locatario (Clausole 1341-1342 cc)", border=1, align="L")
     try:
         if c.get("firma"):
             f1 = str(c["firma"]).split(",")[1]
-            pdf.image(io.BytesIO(base64.b64decode(f1)), x=15, y=y_f+5, w=40)
+            pdf.image(io.BytesIO(base64.b64decode(f1)), x=15, y=y_firma+10, w=45)
         if c.get("firma2"):
             f2 = str(c["firma2"]).split(",")[1]
-            pdf.image(io.BytesIO(base64.b64decode(f2)), x=110, y=y_f+5, w=40)
+            pdf.image(io.BytesIO(base64.b64decode(f2)), x=110, y=y_firma+10, w=45)
     except: pass
 
-    # Pagina 2: Clausole
+    # PAGINA 2: LE 14 CLAUSOLE LEGALI
     pdf.add_page()
-    pdf.set_font("Arial", "B", 8); pdf.cell(95, 6, "CONDIZIONI GENERALI", 0, 0); pdf.cell(95, 6, "GENERAL CONDITIONS", 0, 1)
-    pdf.set_font("Arial", "", 5.5)
-    it = ("1) Uso Ischia. 2) Solo firmatario autorizzato. 3) Cliente responsabile danni/furto. 4) Multe + 25.83 Euro. 5) No sub-noleggio. 6) Riconsegna in tempo. 11) Smarrimento chiavi 250 Euro. 12) Casco obbligatorio.")
-    en = ("1) Ischia only. 2) Signer only. 3) Customer liable for damage/theft. 4) Fines + 25.83 Euro fee. 5) No sub-rental. 6) Prompt return. 11) Keys loss 250 Euro. 12) Helmet mandatory.")
-    y_cl = pdf.get_y()
-    pdf.multi_cell(92, 4, safe(it), border=1); pdf.set_xy(105, y_cl); pdf.multi_cell(92, 4, safe(en), border=1)
+    pdf.set_font("Arial", "B", 11); pdf.cell(0, 10, "CONDIZIONI GENERALI DI CONTRATTO", ln=True, align="C")
+    pdf.set_font("Arial", "", 7)
+    
+    clausole = [
+        "1. UTILIZZO: Il noleggio e' consentito esclusivamente nell'ambito del territorio dell'Isola d'Ischia.",
+        "2. GUIDA: Il veicolo puo' essere condotto solo dal firmatario del presente contratto, munito di patente valida.",
+        "3. RESPONSABILITA': Il locatario e' responsabile per danni, furto, incendio e atti vandalici occorsi durante il noleggio.",
+        "4. INFRAZIONI: Ogni multa e' a carico del cliente. Per ogni notifica verra' addebitato un costo di gestione di Euro 25,83.",
+        "5. DIVIETI: E' severamente vietato il sub-noleggio o la cessione del veicolo a terzi.",
+        "6. RICONSEGNA: Il veicolo deve essere riconsegnato entro l'orario stabilito. Ritardi oltre i 30 min comportano l'addebito di un giorno extra.",
+        "7. STATO MEZZO: Il cliente dichiara di ricevere il veicolo in ottimo stato e senza vizi palesi.",
+        "8. CARBURANTE: Il veicolo deve essere riconsegnato con lo stesso livello di carburante iniziale.",
+        "9. FORO COMPETENTE: Per ogni controversia il foro competente esclusivo e' quello di Napoli.",
+        "10. ISPEZIONE: Il cliente ha l'onere di segnalare graffi o danni prima della partenza; in mancanza, si presumono causati dal cliente.",
+        "11. CHIAVI: Lo smarrimento delle chiavi comporta una penale fissa di Euro 250,00.",
+        "12. CASCO: E' obbligatorio l'uso del casco protettivo. Il locatore declina ogni responsabilita' per il mancato uso dello stesso.",
+        "13. ASSICURAZIONE: Il veicolo e' coperto da polizza RCA verso terzi secondo i massimali di legge.",
+        "14. ALCOOL/DROGA: E' vietata la guida in stato di alterazione. In tal caso l'assicurazione non copre i danni."
+    ]
+    for cl in clausole:
+        pdf.multi_cell(0, 5, safe(cl), border='B')
+    
     return bytes(pdf.output(dest="S"))
 
-def genera_modulo_vigili(c):
-    pdf = PDF(); pdf.add_page()
-    pdf.set_font("Arial", "B", 12); pdf.cell(0, 10, "COMUNICAZIONE DATI CONDUCENTE (Art. 196 CdS)", ln=True, align="C")
-    pdf.set_font("Arial", "", 10); pdf.ln(10)
-    testo = (f"In data {c.get('inizio')} il veicolo tg. {c['targa']} modello {c['modello']}\n"
-             f"era affidato a: {c['nome']} {c['cognome']}\nCF: {c['codice_fiscale']}\nPATENTE: {c.get('numero_patente')}")
-    pdf.multi_cell(0, 8, safe(testo)); return bytes(pdf.output(dest="S"))
+# --- MODULO VIGILI (ART. 196 CdS) ---
+def genera_vigili(c):
+    pdf = FPDF(); pdf.add_page()
+    pdf.set_font("Arial", "B", 12); pdf.cell(0, 10, "COMUNICAZIONE AI SENSI DELL'ART. 196 C.d.S.", ln=True, align="C")
+    pdf.ln(10)
+    pdf.set_font("Arial", "", 11)
+    corpo = (f"La sottoscritta {TITOLARE}, titolare della ditta {DITTA},\n"
+             f"con sede in {SEDE}, P.IVA {PIVA},\n\n"
+             f"DICHIARA\n\n"
+             f"che il veicolo targato {c['targa']}, modello {c['modello']},\n"
+             f"nel periodo dal {c.get('data_inizio')} al {c.get('data_fine')}\n"
+             f"e' stato locato al Sig./Sig.ra:\n\n"
+             f"NOME: {c['nome']}  COGNOME: {c['cognome']}\n"
+             f"NATO A: {c.get('luogo_nascita')} IL: {c.get('data_nascita')}\n"
+             f"RESIDENTE: {c.get('indirizzo_cliente')}\n"
+             f"C.F.: {c['codice_fiscale']}\n"
+             f"PATENTE N.: {c.get('numero_patente')}\n\n"
+             f"Il suddetto locatario e' responsabile in solido per eventuali violazioni al Codice della Strada.")
+    pdf.multi_cell(0, 8, safe(corpo))
+    pdf.ln(20); pdf.cell(0, 10, "Firma del Titolare _________________________", align="R")
+    return bytes(pdf.output(dest="S"))
 
-# --- INTERFACCIA ---
-st.set_page_config(page_title="Battaglia Rent Admin", layout="wide")
-if "auth" not in st.session_state: st.session_state.auth = False
-if not st.session_state.auth:
-    if st.text_input("Password", type="password") == "1234":
-        if st.button("Accedi"): st.session_state.auth = True; st.rerun()
+# --- INTERFACCIA STREAMLIT ---
+st.set_page_config(page_title="BATTAGLIA RENT PRO", layout="wide")
+
+# Login Semplice
+if "autenticato" not in st.session_state: st.session_state.autenticato = False
+if not st.session_state.autenticato:
+    password = st.text_input("Inserisci Password di Gestione", type="password")
+    if st.button("ACCEDI"):
+        if password == "1234": st.session_state.autenticato = True; st.rerun()
     st.stop()
 
-t1, t2 = st.tabs(["📝 NUOVO", "📂 ARCHIVIO"])
-with t1:
-    with st.form("f"):
-        c1, c2, c3 = st.columns(3)
-        n, cg, wa = c1.text_input("Nome"), c2.text_input("Cognome"), c3.text_input("WhatsApp")
-        c4, c5, c6 = st.columns(3)
-        cf, ind, pat = c4.text_input("CF"), c5.text_input("Indirizzo"), c6.text_input("Patente")
-        c7, c8, c9 = st.columns(3)
-        mod, tg, pz = c7.text_input("Mezzo"), c8.text_input("Targa").upper(), c9.number_input("Prezzo (€)", 0.0)
-        f1, f2 = st.columns(2)
-        fp, fd = f1.file_uploader("Patente"), f2.file_uploader("Danni")
+tab_nuovo, tab_archivio = st.tabs(["📝 NUOVO CONTRATTO", "📂 ARCHIVIO DOCUMENTI"])
+
+with tab_nuovo:
+    with st.form("form_contratto", clear_on_submit=True):
+        st.subheader("🏁 DATI NOLEGGIO")
+        col_m1, col_m2, col_m3 = st.columns(3)
+        modello = col_m1.text_input("Modello Veicolo")
+        targa = col_m2.text_input("Targa").upper()
+        prezzo = col_m3.number_input("Prezzo Totale (€)", min_value=0.0)
         
-        st.subheader("🖋️ Firme")
-        col_f1, col_f2 = st.columns(2)
-        with col_f1: can1 = st_canvas(height=120, width=300, key="sig1")
-        with col_f2: can2 = st_canvas(height=120, width=300, key="sig2")
+        col_t1, col_t2, col_t3 = st.columns(3)
+        data_inizio = col_t1.date_input("Data Inizio").strftime("%d/%m/%Y")
+        ora_inizio = col_t2.time_input("Ora Inizio").strftime("%H:%M")
+        data_fine = col_t3.date_input("Data Fine previsto").strftime("%d/%m/%Y")
 
-        if st.form_submit_button("1. INVIA OTP"):
-            cod = str(random.randint(100000, 999999))
-            st.session_state.otp_code = cod
-            clean_wa = wa.replace(" ","").replace("+","")
-            if not clean_wa.startswith("39"): clean_wa = "39" + clean_wa
-            msg = f"Codice firma: {cod}"; url = f"https://wa.me/{clean_wa}?text={urllib.parse.quote(msg)}"
-            st.markdown(f"### [📲 CLICCA QUI PER WHATSAPP]({url})")
+        st.subheader("👤 ANAGRAFICA CLIENTE")
+        c1, c2, c3 = st.columns(3)
+        nome = c1.text_input("Nome")
+        cognome = c2.text_input("Cognome")
+        cellulare = c3.text_input("Cellulare per OTP (es. 3331234567)")
+        
+        c4, c5, c6 = st.columns(3)
+        dn = c4.text_input("Data di Nascita (GG/MM/AAAA)")
+        ln = c5.text_input("Luogo di Nascita")
+        cf = c6.text_input("Codice Fiscale").upper()
+        
+        c7, c8 = st.columns(2)
+        indirizzo = c7.text_input("Indirizzo Residenza Completo")
+        patente = c8.text_input("Numero Patente")
 
-    if "otp_code" in st.session_state:
-        if st.button("2. SALVA"):
-            # Salvataggio dati
-            dati = {
-                "nome": n, "cognome": cg, "targa": tg, "prezzo": pz, "modello": mod, "codice_fiscale": cf,
-                "indirizzo_cliente": ind, "numero_patente": pat, "otp_code": st.session_state.otp_code, "pec": wa,
-                "timestamp_firma": datetime.now().strftime("%d/%m/%Y %H:%M"), "numero_fattura": get_prossimo_numero(),
-                "inizio": str(datetime.now().date()), "fine": str(datetime.now().date()),
-                "firma": "data:image/png;base64," + base64.b64encode(io.BytesIO(Image.fromarray(can1.image_data.astype("uint8")).tobytes()).getvalue()).decode() if can1.image_data is not None else "",
-                "firma2": "data:image/png;base64," + base64.b64encode(io.BytesIO(Image.fromarray(can2.image_data.astype("uint8")).tobytes()).getvalue()).decode() if can2.image_data is not None else ""
-            }
-            supabase.table("contratti").insert(dati).execute()
-            st.success("✅ SALVATO!")
-            del st.session_state.otp_code
+        st.write("---")
+        st.subheader("🖋️ FIRME DIGITALI")
+        f_col1, f_col2 = st.columns(2)
+        with f_col1:
+            st.caption("Firma per Accettazione")
+            canvas1 = st_canvas(height=150, width=400, stroke_width=2, key="can1")
+        with f_col2:
+            st.caption("Firma Clausole Vessatorie")
+            canvas2 = st_canvas(height=150, width=400, stroke_width=2, key="can2")
 
-with t2:
-    q = st.text_input("🔍 Cerca")
-    res = supabase.table("contratti").select("*").order("numero_fattura", desc=True).execute()
-    for r in res.data:
-        if q.lower() in f"{s(r['cognome'])} {s(r['targa'])}".lower():
-            with st.expander(f"📄 N. {r['numero_fattura']} - {r['cognome']}"):
-                c1, c2, c3 = st.columns(3)
-                c1.download_button("📜 Contratto", genera_contratto_completo(r), f"C_{r['id']}.pdf")
-                c2.download_button("👮 Vigili", genera_modulo_vigili(r), f"V_{r['id']}.pdf")
-                c3.download_button("📂 XML", genera_xml_fattura(r), f"F_{r['id']}.xml")
+        invia_otp = st.form_submit_button("1. GENERA E INVIA OTP WHATSAPP")
+        
+        if invia_otp:
+            if not (nome and cellulare and targa):
+                st.error("Dati obbligatori mancanti!")
+            else:
+                otp = str(random.randint(100000, 999999))
+                st.session_state.current_otp = otp
+                msg = f"BATTAGLIA RENT: Il tuo codice OTP per firmare il contratto della targa {targa} e': {otp}"
+                p_wa = cellulare.replace(" ", "").replace("+", "")
+                if not p_wa.startswith("39"): p_wa = "39" + p_wa
+                link = f"https://wa.me/{p_wa}?text={urllib.parse.quote(msg)}"
+                st.markdown(f"### [📲 CLICCA QUI PER INVIARE IL CODICE]({link})")
+
+    # Verifica OTP e Salvataggio
+    if "current_otp" in st.session_state:
+        st.warning("⚠️ Inserisci il codice che hai appena inviato per salvare il contratto.")
+        inserito = st.text_input("Codice OTP")
+        if st.button("2. SALVA E ARCHIVIA CONTRATTO"):
+            if inserito == st.session_state.current_otp:
+                # Conversione Firme
+                def get_b64(canvas):
+                    if canvas.image_data is not None:
+                        img = Image.fromarray(canvas.image_data.astype("uint8"))
+                        buf = io.BytesIO(); img.save(buf, format="PNG")
+                        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+                    return ""
+                
+                dati = {
+                    "nome": nome, "cognome": cognome, "targa": targa, "prezzo": prezzo, "modello": modello,
+                    "data_inizio": data_inizio, "ora_inizio": ora_inizio, "data_fine": data_fine,
+                    "data_nascita": dn, "luogo_nascita": ln, "codice_fiscale": cf, "indirizzo_cliente": indirizzo,
+                    "numero_patente": patente, "pec": cellulare, "otp_code": st.session_state.current_otp,
+                    "firma": get_b64(canvas1), "firma2": get_b64(canvas2),
+                    "timestamp_firma": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    "numero_fattura": get_prossimo_numero()
+                }
+                supabase.table("contratti").insert(dati).execute()
+                st.success("✅ CONTRATTO SALVATO CON SUCCESSO!")
+                del st.session_state.current_otp
+            else:
+                st.error("Codice OTP Errato!")
+
+with tab_archivio:
+    cerca = st.text_input("🔍 Cerca per Cognome o Targa")
+    risultati = supabase.table("contratti").select("*").order("numero_fattura", desc=True).execute()
+    
+    for r in risultati.data:
+        if cerca.lower() in f"{s(r['cognome'])} {s(r['targa'])}".lower():
+            with st.expander(f"📄 Contr. {r['numero_fattura']} - {r['cognome']} ({r['targa']})"):
+                col_b1, col_b2 = st.columns(2)
+                col_b1.download_button("📜 Scarica Contratto + Clausole", genera_contratto(r), f"Contratto_{r['id']}.pdf")
+                col_b2.download_button("👮 Scarica Modulo Vigili", genera_vigili(r), f"Modulo_Vigili_{r['id']}.pdf")
