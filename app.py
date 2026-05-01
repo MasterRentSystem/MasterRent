@@ -42,16 +42,15 @@ def get_prossimo_numero():
         return max(nums) + 1 if nums else 1
     except: return 1
 
-# --- NUOVO GENERATORE XML PROFESSIONALE (ZERO ERRORI ARUBA) ---
+# --- GENERATORE XML PROFESSIONALE PER ARUBA ---
 def genera_xml_sdi(c):
     data_xml = datetime.now().strftime('%Y-%m-%d')
-    # Pulizia dati cliente
     cap_c = c.get('cap', '80075')
     comune_c = c.get('comune', 'Forio')
-    via_c = c.get('indirizzo', 'Via Roma 1')
+    via_c = c.get('indirizzo', 'Senza Indirizzo')
     
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<p:FatturaElettronica versione="FPR12" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<p:FatturaElettronica versione="FPR12" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2">
     <FatturaElettronicaHeader>
         <DatiTrasmissione>
             <IdTrasmittente><IdPaese>IT</IdPaese><IdCodice>{PIVA}</IdCodice></IdTrasmittente>
@@ -65,43 +64,55 @@ def genera_xml_sdi(c):
                 <Anagrafica><Denominazione>{DITTA}</Denominazione></Anagrafica>
                 <RegimeFiscale>RF19</RegimeFiscale>
             </DatiAnagrafici>
-            <Sede>
-                <Indirizzo>{SEDE_VIA}</Indirizzo><CAP>{SEDE_CAP}</CAP><Comune>{SEDE_COMUNE}</Comune><Provincia>{SEDE_PROV}</Provincia><Nazione>IT</Nazione>
-            </Sede>
+            <Sede><Indirizzo>{SEDE_VIA}</Indirizzo><CAP>{SEDE_CAP}</CAP><Comune>{SEDE_COMUNE}</Comune><Provincia>{SEDE_PROV}</Provincia><Nazione>IT</Nazione></Sede>
         </CedentePrestatore>
         <CessionarioCommittente>
-            <DatiAnagrafici>
-                <CodiceFiscale>{c['codice_fiscale']}</CodiceFiscale>
-                <Anagrafica><Nome>{c['nome']}</Nome><Cognome>{c['cognome']}</Cognome></Anagrafica>
-            </DatiAnagrafici>
-            <Sede>
-                <Indirizzo>{via_c}</Indirizzo><CAP>{cap_c}</CAP><Comune>{comune_c}</Comune><Provincia>NA</Provincia><Nazione>IT</Nazione>
-            </Sede>
+            <DatiAnagrafici><CodiceFiscale>{c['codice_fiscale']}</CodiceFiscale><Anagrafica><Nome>{c['nome']}</Nome><Cognome>{c['cognome']}</Cognome></Anagrafica></DatiAnagrafici>
+            <Sede><Indirizzo>{via_c}</Indirizzo><CAP>{cap_c}</CAP><Comune>{comune_c}</Comune><Provincia>NA</Provincia><Nazione>IT</Nazione></Sede>
         </CessionarioCommittente>
     </FatturaElettronicaHeader>
     <FatturaElettronicaBody>
-        <DatiGenerali>
-            <DatiGeneraliDocumento>
-                <TipoDocumento>TD01</TipoDocumento><Divisa>EUR</Divisa><Data>{data_xml}</Data><Numero>{c['numero_fattura']}</Numero>
-            </DatiGeneraliDocumento>
-        </DatiGenerali>
+        <DatiGenerali><DatiGeneraliDocumento><TipoDocumento>TD01</TipoDocumento><Divisa>EUR</Divisa><Data>{data_xml}</Data><Numero>{c['numero_fattura']}</Numero></DatiGeneraliDocumento></DatiGenerali>
         <DatiBeniServizi>
             <DettaglioLinee>
-                <NumeroLinea>1</NumeroLinea>
-                <Descrizione>Noleggio scooter {c['targa']}</Descrizione>
-                <PrezzoUnitario>{c['prezzo']:.2f}</PrezzoUnitario><PrezzoTotale>{c['prezzo']:.2f}</PrezzoTotale><AliquotaIVA>22.00</AliquotaIVA>
+                <NumeroLinea>1</NumeroLinea><Descrizione>Noleggio scooter {c['targa']}</Descrizione><PrezzoUnitario>{c['prezzo']:.2f}</PrezzoUnitario><PrezzoTotale>{c['prezzo']:.2f}</PrezzoTotale><AliquotaIVA>22.00</AliquotaIVA>
             </DettaglioLinee>
             <DatiRiepilogo><AliquotaIVA>22.00</AliquotaIVA><ImponibileImporto>{c['prezzo']:.2f}</ImponibileImporto><Imposta>{(c['prezzo']*0.22):.2f}</Imposta></DatiRiepilogo>
         </DatiBeniServizi>
-        <DatiPagamento>
-            <CondizioniPagamento>TP02</CondizioniPagamento>
-            <DettaglioPagamento><ModalitaPagamento>MP01</ModalitaPagamento><ImportoPagamento>{c['prezzo']:.2f}</ImportoPagamento></DettaglioPagamento>
-        </DatiPagamento>
+        <DatiPagamento><CondizioniPagamento>TP02</CondizioniPagamento><DettaglioPagamento><ModalitaPagamento>MP01</ModalitaPagamento><ImportoPagamento>{c['prezzo']:.2f}</ImportoPagamento></DettaglioPagamento></DatiPagamento>
     </FatturaElettronicaBody>
 </p:FatturaElettronica>"""
     return xml.encode('utf-8')
 
-# --- (Resto delle funzioni PDF rimangono uguali) ---
+# --- GENERATORE MODULO RINOTIFICA VIGILI ---
+def genera_rinotifica_pdf(c, v):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Times", "", 11)
+    pdf.set_xy(110, 20)
+    pdf.cell(0, 5, "Spett. le", ln=True)
+    pdf.set_x(110)
+    pdf.set_font("Times", "B", 11)
+    pdf.cell(0, 5, safe(f"Polizia Locale di {v['comune']}"), ln=True)
+    pdf.ln(15)
+    pdf.set_font("Times", "B", 10)
+    pdf.cell(20, 5, "OGGETTO:")
+    pdf.set_font("Times", "", 10)
+    pdf.cell(0, 5, f"RIFERIMENTO VS. ACCERTAMENTO VIOLAZIONE N. {v['num']} PROT. {v['prot']}")
+    pdf.ln(10)
+    testo = f"""In riferimento al Verbale... la sottoscritta BATTAGLIA MARIANNA nata a Berlino (Germania) il 13/01/1987 e residente in Forio alla Via Cognole n. 5 in qualita' di titolare dell'omonima ditta individuale, C.F.: {CF_TITOLARE} e P.IVA: {PIVA}
+    
+    DICHIARA
+Ai sensi della L. 445/2000 che il veicolo modello {c['modello']} targato {c['targa']} il giorno {v['data']} era concesso in locazione senza conducente al signor:
+
+COGNOME E NOME: {c['cognome'].upper()} {c['nome'].upper()}
+LUOGO E DATA DI NASCITA: {c.get('luogo_nascita', '-').upper()} {c.get('data_nascita', '-')}
+RESIDENZA: {c.get('indirizzo', '-').upper()}
+IDENTIFICATO A MEZZO: Patente di Guida"""
+    pdf.multi_cell(0, 6, safe(testo))
+    pdf.ln(20); pdf.set_x(130); pdf.cell(0, 5, "In fede", ln=True, align="C")
+    pdf.set_x(130); pdf.cell(0, 5, "Marianna Battaglia", ln=True, align="C")
+    return bytes(pdf.output(dest="S"))
 
 # --- INTERFACCIA APP ---
 st.set_page_config(page_title="BATTAGLIA RENT", layout="centered")
@@ -127,11 +138,9 @@ with tab1:
         com_c = c3.text_input("Città", value="Forio")
         cap_c = c4.text_input("CAP", value="80075")
         wa = st.text_input("WhatsApp")
-        
         st.subheader("🛵 Mezzo")
         tg = st.text_input("Targa").upper()
         prz = st.number_input("Prezzo €", 0.0)
-        
         f1_file = st.file_uploader("FOTO PATENTE", type=['jpg','jpeg','png'])
         f2_file = st.file_uploader("FOTO CONTRATTO", type=['jpg','jpeg','png'])
 
@@ -139,13 +148,42 @@ with tab1:
             f1_ready = correggi_e_converti_foto(f1_file)
             f2_ready = correggi_e_converti_foto(f2_file)
             num_f = get_prossimo_numero()
-            dati = {
-                "nome":n, "cognome":cg, "indirizzo":ind, "comune":com_c, "cap":cap_c,
-                "codice_fiscale":cf, "pec":wa, "targa":tg, "prezzo":prz,
-                "data_inizio":datetime.now().strftime("%d/%m/%Y"),
-                "numero_fattura":num_f, "foto_patente":f1_ready, "firma":f2_ready
-            }
+            dati = {"nome":n,"cognome":cg,"indirizzo":ind,"comune":com_c,"cap":cap_c,"codice_fiscale":cf,"pec":wa,"targa":tg,"prezzo":prz,"data_inizio":datetime.now().strftime("%d/%m/%Y"),"numero_fattura":num_f,"foto_patente":f1_ready,"firma":f2_ready}
             supabase.table("contratti").insert(dati).execute()
-            st.success(f"Salvato! Ora scarica l'XML dall'Archivio.")
+            st.success(f"Salvato! Numero Fattura: {num_f}")
 
-# ... (Tab 2 e Tab 3 rimangono uguali, usa il codice precedente per la visualizzazione)
+with tab2:
+    search = st.text_input("🔍 Cerca")
+    res = supabase.table("contratti").select("*").order("id", desc=True).execute()
+    for r in res.data:
+        if search.lower() in f"{r['targa']} {r['cognome']}".lower():
+            r_id = r['id']
+            with st.expander(f"📄 {r['targa']} - {r['cognome']}"):
+                col_a, col_b = st.columns(2)
+                xml_data = genera_xml_sdi(r)
+                col_a.download_button("📩 XML (Aruba)", xml_data, f"{r['numero_fattura']}.xml", key=f"xml_{r_id}")
+                
+                st.write("---")
+                c_i1, c_i2 = st.columns(2)
+                try:
+                    if r.get("foto_patente"):
+                        img_p = base64.b64decode(r["foto_patente"].split("base64,")[1])
+                        c_i1.image(img_p, caption="Patente")
+                    if r.get("firma"):
+                        img_f = base64.b64decode(r["firma"].split("base64,")[1])
+                        c_i2.image(img_f, caption="Contratto")
+                except: st.error("Errore visualizzazione foto")
+
+with tab3:
+    st.subheader("🚨 Rinotifica Vigili")
+    tg_m = st.text_input("Targa mezzo").upper()
+    v_c = st.text_input("Comune Polizia Locale")
+    v_d = st.text_input("Data Infrazione")
+    v_n = st.text_input("Verbale N.")
+    v_p = st.text_input("Prot.")
+    if st.button("📄 GENERA MODULO"):
+        db_res = supabase.table("contratti").select("*").eq("targa", tg_m).order("id", desc=True).execute()
+        if db_res.data:
+            pdf_v = genera_rinotifica_pdf(db_res.data[0], {"comune":v_c,"data":v_d,"num":v_n,"prot":v_p})
+            st.download_button("📩 SCARICA MODULO", pdf_v, f"Rinotifica_{tg_m}.pdf")
+        else: st.error("Targa non trovata!")
