@@ -27,11 +27,14 @@ def safe(t):
 
 def correggi_e_converti_foto(image_file):
     if image_file is not None:
-        img = Image.open(image_file)
-        img = ImageOps.exif_transpose(img)
-        buffered = io.BytesIO()
-        img.save(buffered, format="JPEG", quality=70)
-        return "data:image/jpeg;base64," + base64.b64encode(buffered.getvalue()).decode()
+        try:
+            img = Image.open(image_file)
+            img = ImageOps.exif_transpose(img)
+            buffered = io.BytesIO()
+            img.save(buffered, format="JPEG", quality=70)
+            return "data:image/jpeg;base64," + base64.b64encode(buffered.getvalue()).decode()
+        except Exception:
+            return None
     return None
 
 def get_prossimo_numero():
@@ -41,7 +44,7 @@ def get_prossimo_numero():
         return max(nums) + 1 if nums else 1
     except: return 1
 
-# --- GENERATORE XML PROFESSIONALE (INTERMEDIARIO ARUBA) ---
+# --- GENERATORE XML ---
 def genera_xml_sdi(c):
     data_xml = datetime.now().strftime('%Y-%m-%d')
     cap_c = c.get('cap') if c.get('cap') else "80075"
@@ -88,7 +91,7 @@ def genera_xml_sdi(c):
 </p:FatturaElettronica>"""
     return xml.encode('utf-8')
 
-# --- GENERATORE MODULO RINOTIFICA ---
+# --- GENERATORE MODULO MULTE ---
 def genera_rinotifica_pdf(c, v):
     pdf = FPDF()
     pdf.add_page()
@@ -114,7 +117,7 @@ CODICE FISCALE: {c['codice_fiscale'].upper()}"""
     pdf.ln(20); pdf.set_x(130); pdf.cell(0, 5, "In fede, Marianna Battaglia", align="C")
     return bytes(pdf.output(dest="S"))
 
-# --- INTERFACCIA ---
+# --- APP ---
 st.set_page_config(page_title="BATTAGLIA RENT", layout="centered")
 
 if "auth" not in st.session_state: st.session_state.auth = False
@@ -155,8 +158,18 @@ with tab2:
             with st.expander(f"📄 {r['targa']} - {r['cognome']}"):
                 st.download_button("📩 XML (Aruba)", genera_xml_sdi(r), f"{r['numero_fattura']}.xml", key=f"x_{r['id']}")
                 c_i1, c_i2 = st.columns(2)
-                if r.get("foto_patente"): c_i1.image(base64.b64decode(r["foto_patente"].split(",")[1]), caption="Patente")
-                if r.get("firma"): c_i2.image(base64.b64decode(r["firma"].split(",")[1]), caption="Contratto")
+                
+                # PROTEZIONE CONTRO IMMAGINI CORROTTE
+                for key, col in [("foto_patente", c_i1), ("firma", c_i2)]:
+                    img_str = r.get(key)
+                    if img_str and "base64," in img_str:
+                        try:
+                            img_data = base64.b64decode(img_str.split("base64,")[1])
+                            col.image(img_data, use_container_width=True)
+                        except Exception:
+                            col.warning(f"{key} non leggibile")
+                    else:
+                        col.info(f"{key} mancante")
 
 with tab3:
     st.subheader("🚨 Multe")
