@@ -4,6 +4,7 @@ import base64
 from datetime import datetime
 from fpdf import FPDF
 import io
+import urllib.parse
 from PIL import Image, ImageOps
 
 # --- CONFIGURAZIONE BATTAGLIA RENT ---
@@ -44,14 +45,18 @@ def get_prossimo_numero():
         return max(nums) + 1 if nums else 1
     except: return 1
 
-# --- GENERATORE XML ---
+# --- GENERATORE XML PROFESSIONALE (PER ARUBA) ---
 def genera_xml_sdi(c):
     data_xml = datetime.now().strftime('%Y-%m-%d')
     cap_c = c.get('cap') if c.get('cap') else "80075"
     comune_c = c.get('comune') if c.get('comune') else "Forio"
     via_c = c.get('indirizzo') if c.get('indirizzo') else "Senza Indirizzo"
     cf_cliente = str(c.get('codice_fiscale', '')).strip().upper()
-    if not cf_cliente: cf_cliente = "00000000000"
+    
+    if not cf_cliente or cf_cliente == "XXXXXXXXXXXXXXXX":
+        cf_valido = "00000000000"
+    else:
+        cf_valido = cf_cliente
 
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <p:FatturaElettronica versione="FPR12" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2">
@@ -72,10 +77,10 @@ def genera_xml_sdi(c):
         </CedentePrestatore>
         <CessionarioCommittente>
             <DatiAnagrafici>
-                <CodiceFiscale>{cf_cliente}</CodiceFiscale>
+                <CodiceFiscale>{cf_valido}</CodiceFiscale>
                 <Anagrafica><Nome>{c['nome']}</Nome><Cognome>{c['cognome']}</Cognome></Anagrafica>
             </DatiAnagrafici>
-            <Sede><Indirizzo>{via_c}</Indirizzo><CAP>{cap_c}</CAP><Comune>{comune_c}</Comune><Provincia>NA</Provincia><Nazione>IT</Nazione></Sede>
+            <Sede><Indirizzo>{via_c}</Indirizzo><CAP>{cap_c if cf_cliente != "XXXXXXXXXXXXXXXX" else "00000"}</CAP><Comune>{comune_c}</Comune><Provincia>NA</Provincia><Nazione>IT</Nazione></Sede>
         </CessionarioCommittente>
     </FatturaElettronicaHeader>
     <FatturaElettronicaBody>
@@ -91,7 +96,34 @@ def genera_xml_sdi(c):
 </p:FatturaElettronica>"""
     return xml.encode('utf-8')
 
-# --- GENERATORE MODULO MULTE ---
+# --- GENERATORE FATTURA DI CORTESIA (PDF PER CLIENTE) ---
+def genera_cortesia_pdf(c):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, DITTA, ln=True, align="C")
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(0, 5, f"{SEDE_VIA} - {SEDE_CAP} {SEDE_COMUNE}", ln=True, align="C")
+    pdf.cell(0, 5, f"P.IVA: {PIVA}", ln=True, align="C")
+    pdf.ln(10)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, f"RICEVUTA DI CORTESIA N. {c['numero_fattura']}", ln=True)
+    pdf.set_font("Arial", "", 11)
+    pdf.cell(0, 7, f"Data: {c['data_inizio']}", ln=True)
+    pdf.cell(0, 7, f"Cliente: {c['nome']} {c['cognome']}", ln=True)
+    pdf.cell(0, 7, f"Codice Fiscale: {c['codice_fiscale']}", ln=True)
+    pdf.ln(5)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.cell(140, 10, "Descrizione", 1, 0, "L", True)
+    pdf.cell(50, 10, "Importo", 1, 1, "R", True)
+    pdf.cell(140, 10, f"Noleggio Scooter targa {c['targa']}", 1)
+    pdf.cell(50, 10, f"Euro {c['prezzo']:.2f}", 1, 1, "R")
+    pdf.ln(10)
+    pdf.set_font("Arial", "I", 9)
+    pdf.multi_cell(0, 5, "La presente non costituisce fattura valida ai fini fiscali. La fattura elettronica ufficiale sara' inviata tramite il Sistema di Interscambio.")
+    return bytes(pdf.output(dest="S"))
+
+# --- GENERATORE MODULO RINOTIFICA MULTE ---
 def genera_rinotifica_pdf(c, v):
     pdf = FPDF()
     pdf.add_page()
@@ -117,14 +149,18 @@ CODICE FISCALE: {c['codice_fiscale'].upper()}"""
     pdf.ln(20); pdf.set_x(130); pdf.cell(0, 5, "In fede, Marianna Battaglia", align="C")
     return bytes(pdf.output(dest="S"))
 
-# --- APP ---
+# --- INTERFACCIA APP ---
 st.set_page_config(page_title="BATTAGLIA RENT", layout="centered")
 
-if "auth" not in st.session_state: st.session_state.auth = False
+if "auth" not in st.session_state:
+    st.session_state.auth = False
+
 if not st.session_state.auth:
     pwd = st.text_input("Password", type="password")
     if st.button("ACCEDI"):
-        if pwd == "1234": st.session_state.auth = True; st.rerun()
+        if pwd == "1234":
+            st.session_state.auth = True
+            st.rerun()
     st.stop()
 
 tab1, tab2, tab3 = st.tabs(["📝 NUOVO", "📂 ARCHIVIO", "🚨 MULTE"])
@@ -134,11 +170,11 @@ with tab1:
         st.subheader("👤 Cliente")
         c1, c2 = st.columns(2)
         n, cg = c1.text_input("Nome"), c2.text_input("Cognome")
-        cf = st.text_input("Codice Fiscale")
+        cf = st.text_input("Codice Fiscale (o 16 'X' per stranieri)")
         ln, dn = c1.text_input("Luogo Nascita"), c2.text_input("Data Nascita")
         ind = st.text_input("Indirizzo")
         com_c, cap_c = c1.text_input("Città", "Forio"), c2.text_input("CAP", "80075")
-        wa = st.text_input("WhatsApp")
+        wa = st.text_input("WhatsApp (es: 39333123456)")
         st.subheader("🛵 Mezzo")
         tg, mod = c1.text_input("Targa").upper(), c2.text_input("Modello")
         prz = st.number_input("Prezzo €", 0.0)
@@ -148,18 +184,32 @@ with tab1:
             num_f = get_prossimo_numero()
             dati = {"nome":n,"cognome":cg,"codice_fiscale":cf,"indirizzo":ind,"comune":com_c,"cap":cap_c,"luogo_nascita":ln,"data_nascita":dn,"targa":tg,"modello":mod,"prezzo":prz,"pec":wa,"numero_fattura":num_f,"data_inizio":datetime.now().strftime("%d/%m/%Y"),"foto_patente":correggi_e_converti_foto(f1),"firma":correggi_e_converti_foto(f2)}
             supabase.table("contratti").insert(dati).execute()
-            st.success(f"Archiviato! Fattura {num_f}")
+            st.success(f"Archiviato con successo! Fattura {num_f}")
 
 with tab2:
-    search = st.text_input("🔍 Cerca")
+    search = st.text_input("🔍 Cerca per Targa o Cognome")
     res = supabase.table("contratti").select("*").order("id", desc=True).execute()
     for r in res.data:
         if search.lower() in f"{r['targa']} {r['cognome']}".lower():
             with st.expander(f"📄 {r['targa']} - {r['cognome']}"):
-                st.download_button("📩 XML (Aruba)", genera_xml_sdi(r), f"{r['numero_fattura']}.xml", key=f"x_{r['id']}")
-                c_i1, c_i2 = st.columns(2)
                 
-                # PROTEZIONE CONTRO IMMAGINI CORROTTE
+                col_a, col_b, col_c = st.columns(3)
+                
+                # Download XML per Aruba
+                xml_data = genera_xml_sdi(r)
+                col_a.download_button("📩 XML Aruba", xml_data, f"{r['numero_fattura']}.xml", key=f"x_{r['id']}")
+                
+                # Download PDF Cortesia
+                pdf_c = genera_cortesia_pdf(r)
+                col_b.download_button("📄 PDF Cliente", pdf_c, f"Ricevuta_{r['targa']}.pdf", key=f"p_{r['id']}")
+                
+                # Tasto WhatsApp
+                num_wa = ''.join(filter(str.isdigit, str(r.get('pec', ''))))
+                msg = urllib.parse.quote(f"Ciao {r['nome']}, ecco la ricevuta del tuo noleggio {DITTA}. Grazie!")
+                col_c.link_button("💬 Chat WA", f"https://wa.me/{num_wa}?text={msg}")
+
+                st.write("---")
+                c_i1, c_i2 = st.columns(2)
                 for key, col in [("foto_patente", c_i1), ("firma", c_i2)]:
                     img_str = r.get(key)
                     if img_str and "base64," in img_str:
@@ -172,11 +222,14 @@ with tab2:
                         col.info(f"{key} mancante")
 
 with tab3:
-    st.subheader("🚨 Multe")
-    tg_m = st.text_input("Targa").upper()
+    st.subheader("🚨 Gestione Multe")
+    tg_m = st.text_input("Inserisci Targa").upper()
     v_c, v_d = st.text_input("Comune Polizia"), st.text_input("Data Infrazione")
     v_n, v_p = st.text_input("Verbale N."), st.text_input("Prot.")
-    if st.button("📄 GENERA MODULO"):
+    if st.button("📄 GENERA MODULO RINOTIFICA"):
         db = supabase.table("contratti").select("*").eq("targa", tg_m).order("id", desc=True).execute()
-        if db.data: st.download_button("📩 SCARICA", genera_rinotifica_pdf(db.data[0],{"comune":v_c,"data":v_d,"num":v_n,"prot":v_p}), f"Multe_{tg_m}.pdf")
-        else: st.error("Targa non trovata")
+        if db.data:
+            pdf_v = genera_rinotifica_pdf(db.data[0], {"comune":v_c,"data":v_d,"num":v_n,"prot":v_p})
+            st.download_button("📩 SCARICA MODULO", pdf_v, f"Rinotifica_{tg_m}.pdf")
+        else:
+            st.error("Targa non trovata in archivio!")
