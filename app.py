@@ -28,7 +28,6 @@ def safe(t):
 def correggi_e_converti_foto(image_file):
     if image_file is not None:
         img = Image.open(image_file)
-        # Raddrizza la foto in base ai dati del sensore del telefono
         img = ImageOps.exif_transpose(img)
         buffered = io.BytesIO()
         img.save(buffered, format="JPEG", quality=70)
@@ -42,25 +41,20 @@ def get_prossimo_numero():
         return max(nums) + 1 if nums else 1
     except: return 1
 
-# --- GENERATORE XML PROFESSIONALE (PER INTERMEDIARIO ARUBA) ---
+# --- GENERATORE XML PROFESSIONALE (INTERMEDIARIO ARUBA) ---
 def genera_xml_sdi(c):
     data_xml = datetime.now().strftime('%Y-%m-%d')
     cap_c = c.get('cap') if c.get('cap') else "80075"
     comune_c = c.get('comune') if c.get('comune') else "Forio"
     via_c = c.get('indirizzo') if c.get('indirizzo') else "Senza Indirizzo"
-    
     cf_cliente = str(c.get('codice_fiscale', '')).strip().upper()
-    if not cf_cliente:
-        cf_cliente = "00000000000"
+    if not cf_cliente: cf_cliente = "00000000000"
 
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <p:FatturaElettronica versione="FPR12" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2">
     <FatturaElettronicaHeader>
         <DatiTrasmissione>
-            <IdTrasmittente>
-                <IdPaese>IT</IdPaese>
-                <IdCodice>01879020517</IdCodice>
-            </IdTrasmittente>
+            <IdTrasmittente><IdPaese>IT</IdPaese><IdCodice>01879020517</IdCodice></IdTrasmittente>
             <ProgressivoInvio>{c['numero_fattura']}</ProgressivoInvio>
             <FormatoTrasmissione>FPR12</FormatoTrasmissione>
             <CodiceDestinatario>0000000</CodiceDestinatario>
@@ -94,7 +88,7 @@ def genera_xml_sdi(c):
 </p:FatturaElettronica>"""
     return xml.encode('utf-8')
 
-# --- GENERATORE MODULO RINOTIFICA VIGILI ---
+# --- GENERATORE MODULO RINOTIFICA ---
 def genera_rinotifica_pdf(c, v):
     pdf = FPDF()
     pdf.add_page()
@@ -110,21 +104,17 @@ def genera_rinotifica_pdf(c, v):
     pdf.set_font("Times", "", 10)
     pdf.cell(0, 5, f"RIFERIMENTO VS. ACCERTAMENTO VIOLAZIONE N. {v['num']} PROT. {v['prot']}")
     pdf.ln(10)
-    testo = f"""In riferimento al Verbale di accertamento di infrazione... la sottoscritta BATTAGLIA MARIANNA nata a Berlino (Germania) il 13/01/1987 e residente in Forio alla Via Cognole n. 5 in qualita' di titolare dell'omonima ditta individuale, C.F.: {CF_TITOLARE} e P.IVA: {PIVA}
-    
-    DICHIARA
-Ai sensi della L. 445/2000 che il veicolo modello {c.get('modello', 'Scooter')} targato {c['targa']} il giorno {v['data']} era concesso in locazione senza conducente al signor:
+    testo = f"""In riferimento al Verbale in oggetto, la sottoscritta BATTAGLIA MARIANNA nata a Berlino (Germania) il 13/01/1987 e residente in Forio alla Via Cognole n. 5 in qualita' di titolare della ditta {DITTA}, P.IVA {PIVA}, DICHIARA che il veicolo modello {c.get('modello', 'Scooter')} targato {c['targa']} il giorno {v['data']} era locato a:
 
 COGNOME E NOME: {c['cognome'].upper()} {c['nome'].upper()}
-LUOGO E DATA DI NASCITA: {c.get('luogo_nascita', '-').upper()} {c.get('data_nascita', '-')}
-RESIDENZA: {c.get('indirizzo', '-').upper()}
-IDENTIFICATO A MEZZO: Patente di Guida"""
+NATO A: {c.get('luogo_nascita', '-').upper()} IL {c.get('data_nascita', '-')}
+RESIDENZA: {c.get('indirizzo', '-').upper()} ({c.get('comune', '-').upper()})
+CODICE FISCALE: {c['codice_fiscale'].upper()}"""
     pdf.multi_cell(0, 6, safe(testo))
-    pdf.ln(20); pdf.set_x(130); pdf.cell(0, 5, "In fede", ln=True, align="C")
-    pdf.set_x(130); pdf.cell(0, 5, "Marianna Battaglia", ln=True, align="C")
+    pdf.ln(20); pdf.set_x(130); pdf.cell(0, 5, "In fede, Marianna Battaglia", align="C")
     return bytes(pdf.output(dest="S"))
 
-# --- INTERFACCIA APP ---
+# --- INTERFACCIA ---
 st.set_page_config(page_title="BATTAGLIA RENT", layout="centered")
 
 if "auth" not in st.session_state: st.session_state.auth = False
@@ -137,66 +127,43 @@ if not st.session_state.auth:
 tab1, tab2, tab3 = st.tabs(["📝 NUOVO", "📂 ARCHIVIO", "🚨 MULTE"])
 
 with tab1:
-    with st.form("registrazione"):
+    with st.form("reg"):
         st.subheader("👤 Cliente")
         c1, c2 = st.columns(2)
-        n = c1.text_input("Nome")
-        cg = c2.text_input("Cognome")
+        n, cg = c1.text_input("Nome"), c2.text_input("Cognome")
         cf = st.text_input("Codice Fiscale")
+        ln, dn = c1.text_input("Luogo Nascita"), c2.text_input("Data Nascita")
         ind = st.text_input("Indirizzo")
-        c3, c4 = st.columns(2)
-        com_c = c3.text_input("Città", value="Forio")
-        cap_c = c4.text_input("CAP", value="80075")
+        com_c, cap_c = c1.text_input("Città", "Forio"), c2.text_input("CAP", "80075")
         wa = st.text_input("WhatsApp")
         st.subheader("🛵 Mezzo")
-        tg = st.text_input("Targa").upper()
+        tg, mod = c1.text_input("Targa").upper(), c2.text_input("Modello")
         prz = st.number_input("Prezzo €", 0.0)
-        f1_file = st.file_uploader("FOTO PATENTE", type=['jpg','jpeg','png'])
-        f2_file = st.file_uploader("FOTO CONTRATTO", type=['jpg','jpeg','png'])
+        f1, f2 = st.file_uploader("FOTO PATENTE"), st.file_uploader("FOTO CONTRATTO")
 
         if st.form_submit_button("💾 SALVA"):
-            if not n or not tg or not cf:
-                st.error("Dati obbligatori mancanti (Nome, Targa o Codice Fiscale)!")
-            else:
-                f1_ready = correggi_e_converti_foto(f1_file)
-                f2_ready = correggi_e_converti_foto(f2_file)
-                num_f = get_prossimo_numero()
-                dati = {"nome":n,"cognome":cg,"indirizzo":ind,"comune":com_c,"cap":cap_c,"codice_fiscale":cf,"pec":wa,"targa":tg,"prezzo":prz,"data_inizio":datetime.now().strftime("%d/%m/%Y"),"numero_fattura":num_f,"foto_patente":f1_ready,"firma":f2_ready}
-                supabase.table("contratti").insert(dati).execute()
-                st.success(f"Noleggio Registrato! Fattura N. {num_f}")
+            num_f = get_prossimo_numero()
+            dati = {"nome":n,"cognome":cg,"codice_fiscale":cf,"indirizzo":ind,"comune":com_c,"cap":cap_c,"luogo_nascita":ln,"data_nascita":dn,"targa":tg,"modello":mod,"prezzo":prz,"pec":wa,"numero_fattura":num_f,"data_inizio":datetime.now().strftime("%d/%m/%Y"),"foto_patente":correggi_e_converti_foto(f1),"firma":correggi_e_converti_foto(f2)}
+            supabase.table("contratti").insert(dati).execute()
+            st.success(f"Archiviato! Fattura {num_f}")
 
 with tab2:
     search = st.text_input("🔍 Cerca")
     res = supabase.table("contratti").select("*").order("id", desc=True).execute()
     for r in res.data:
         if search.lower() in f"{r['targa']} {r['cognome']}".lower():
-            r_id = r['id']
             with st.expander(f"📄 {r['targa']} - {r['cognome']}"):
-                col_a, col_b = st.columns(2)
-                xml_data = genera_xml_sdi(r)
-                col_a.download_button("📩 XML (Aruba)", xml_data, f"{r['numero_fattura']}.xml", key=f"xml_{r_id}")
-                
-                st.write("---")
+                st.download_button("📩 XML (Aruba)", genera_xml_sdi(r), f"{r['numero_fattura']}.xml", key=f"x_{r['id']}")
                 c_i1, c_i2 = st.columns(2)
-                try:
-                    if r.get("foto_patente"):
-                        img_p = base64.b64decode(r["foto_patente"].split("base64,")[1])
-                        c_i1.image(img_p, caption="Patente")
-                    if r.get("firma"):
-                        img_f = base64.b64decode(r["firma"].split("base64,")[1])
-                        c_i2.image(img_f, caption="Contratto")
-                except: st.error("Errore foto")
+                if r.get("foto_patente"): c_i1.image(base64.b64decode(r["foto_patente"].split(",")[1]), caption="Patente")
+                if r.get("firma"): c_i2.image(base64.b64decode(r["firma"].split(",")[1]), caption="Contratto")
 
 with tab3:
-    st.subheader("🚨 Rinotifica Vigili")
-    tg_m = st.text_input("Targa mezzo").upper()
-    v_c = st.text_input("Comune Polizia Locale")
-    v_d = st.text_input("Data Infrazione")
-    v_n = st.text_input("Verbale N.")
-    v_p = st.text_input("Prot.")
+    st.subheader("🚨 Multe")
+    tg_m = st.text_input("Targa").upper()
+    v_c, v_d = st.text_input("Comune Polizia"), st.text_input("Data Infrazione")
+    v_n, v_p = st.text_input("Verbale N."), st.text_input("Prot.")
     if st.button("📄 GENERA MODULO"):
-        db_res = supabase.table("contratti").select("*").eq("targa", tg_m).order("id", desc=True).execute()
-        if db_res.data:
-            pdf_v = genera_rinotifica_pdf(db_res.data[0], {"comune":v_c,"data":v_d,"num":v_n,"prot":v_p})
-            st.download_button("📩 SCARICA MODULO", pdf_v, f"Rinotifica_{tg_m}.pdf")
-        else: st.error("Targa non trovata in archivio!")
+        db = supabase.table("contratti").select("*").eq("targa", tg_m).order("id", desc=True).execute()
+        if db.data: st.download_button("📩 SCARICA", genera_rinotifica_pdf(db.data[0],{"comune":v_c,"data":v_d,"num":v_n,"prot":v_p}), f"Multe_{tg_m}.pdf")
+        else: st.error("Targa non trovata")
